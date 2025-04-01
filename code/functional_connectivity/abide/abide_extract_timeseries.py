@@ -110,21 +110,24 @@ def save_data(pooled_subjects, atlas_name, num_subjects, output_dir='data'):
         os.makedirs(this_output_dir)
 
     # convert the list of pooled subjects to a numpy array
-    if num_subjects <= 30:
+    if num_subjects <= 40:
         pooled_subjects = np.array(pooled_subjects)
         shape = pooled_subjects.shape
         pooled_subjects = pooled_subjects.reshape(pooled_subjects.shape[0], -1)
+        np.savetxt(f'{this_output_dir}/pooled.csv', pooled_subjects, delimiter=',')
+        np.savetxt(f'{this_output_dir}/shape.csv', shape, delimiter=',')
     
     else:
         pooled_subjects = np.array(pooled_subjects, dtype=object)
-        shape = pooled_subjects.shape
-        print(shape)
-        pooled_subjects = pooled_subjects.reshape(pooled_subjects.shape[0], -1)
-        print(f"Reshaped pooled subjects shape: {pooled_subjects.shape}")
-    
 
-    np.savetxt(f'{this_output_dir}/pooled.csv', pooled_subjects , delimiter=',')
-    np.savetxt(f'{this_output_dir}/shape.csv', shape, delimiter=',')
+        shape = pooled_subjects.shape
+        np.savetxt(f'{this_output_dir}/shape.csv', shape, delimiter=',')
+
+        # Open the file in write mode
+        with open(f'{this_output_dir}/pooled.csv', "w") as file:
+            # Iterate through the array and write each object to a new line
+            for obj in pooled_subjects:
+                file.write(str(obj) + "\n")
 
 # extract whole brain time series using the HarvardOxford atlas
 def extract_whole_time_series(base_url, phenotype_file, atlas_name='HarvardOxford', atlas_dir='atlases', num_subjects=30):
@@ -171,7 +174,7 @@ def main():
     phenotype_file = f"{working_dir}/datasets/abide/phenotypic/Phenotypic_V1_0b_preprocessed1.csv"
 
     # SET THE NUMBER OF SUBJECTS, MAX IS 884
-    num_subjects = 40  # You can change this to any number up to 884
+    num_subjects = 400  # You can change this to any number up to 884
     extract_cort_time_series(abide_url, phenotype_file, num_subjects=num_subjects)
     extract_whole_time_series(abide_url, phenotype_file, num_subjects=num_subjects)
 
