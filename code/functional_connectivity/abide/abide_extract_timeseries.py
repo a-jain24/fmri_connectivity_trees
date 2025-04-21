@@ -31,18 +31,20 @@ def get_masker(atlas, mask_type='cort'):
         resampling_target="data",
         t_r=2,
         detrend=True,
-        low_pass=0.1,
-        high_pass=0.01,
         memory="nilearn_cache",
         memory_level=1,
         standardize="zscore_sample",
         standardize_confounds="zscore_sample",
     ).fit()
-        
+    
+    # double check TR
     elif mask_type == 'whole':
         masker = NiftiLabelsMasker(
         atlas.maps,
         labels=atlas.labels,
+        resampling_target="data",
+        t_r=2,
+        detrend=True,
         standardize="zscore_sample",
     ).fit()
         
