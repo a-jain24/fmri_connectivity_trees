@@ -1,0 +1,2 @@
+Metric,Model Name,Fraction,Hold Out,Bin Num,MI Bin Num,Train Accuracy,Test Accuracy
+mutual_info,gnb,0.4,0.2,400.0,10,0.84375,0.79375

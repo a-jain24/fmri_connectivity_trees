@@ -1,0 +1,2 @@
+Metric,Model Name,Fraction,Hold Out,Bin Num,MI Bin Num,Train Accuracy,Test Accuracy
+chow_liu,gnb,0.3,0.2,300,10,0.825,0.5416666666666666

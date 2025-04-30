@@ -1,0 +1,2 @@
+Metric,Model Name,Fraction,Hold Out,Bin Num,MI Bin Num,Train Accuracy,Test Accuracy
+covariance,gnb,0.6,0.2,600.0,10,0.6270833333333333,0.5625
