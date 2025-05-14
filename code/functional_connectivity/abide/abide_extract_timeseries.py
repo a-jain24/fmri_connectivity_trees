@@ -100,7 +100,7 @@ def get_pooled(base_url, abide_ids, phenotype, masker, num_subjects=30):
     
     return pooled_subjects
 
-def save_data(pooled_subjects, atlas_name, num_subjects, output_dir='data'):
+def save_data(pooled_subjects, atlas_name, num_subjects, abide_ids, output_dir='output/roi_time_series'):
 
     this_output_dir = f'{output_dir}/{num_subjects}_{atlas_name}'
 
@@ -110,26 +110,26 @@ def save_data(pooled_subjects, atlas_name, num_subjects, output_dir='data'):
     
     if not os.path.exists(this_output_dir):
         os.makedirs(this_output_dir)
-
-    # convert the list of pooled subjects to a numpy array
-    if num_subjects <= 40:
-        pooled_subjects = np.array(pooled_subjects)
-        shape = pooled_subjects.shape
-        pooled_subjects = pooled_subjects.reshape(pooled_subjects.shape[0], -1)
-        np.savetxt(f'{this_output_dir}/pooled.csv', pooled_subjects, delimiter=',')
-        np.savetxt(f'{this_output_dir}/shape.csv', shape, delimiter=',')
     
-    else:
-        pooled_subjects = np.array(pooled_subjects, dtype=object)
+    if not os.path.exists(f'{this_output_dir}/pooled'):
+        os.makedirs(f'{this_output_dir}/pooled')
+    
+    if not os.path.exists(f'{this_output_dir}/shape'):
+        os.makedirs(f'{this_output_dir}/shape')
 
-        shape = pooled_subjects.shape
-        np.savetxt(f'{this_output_dir}/shape.csv', shape, delimiter=',')
+    for subject, id in zip(
+        pooled_subjects,
+        abide_ids[:num_subjects]
+    ):
+        # Convert each subject's time series to a numpy array and get shape
+        subject = np.array(subject)
+        shape = subject.shape
 
-        # Open the file in write mode
-        with open(f'{this_output_dir}/pooled.csv', "w") as file:
-            # Iterate through the array and write each object to a new line
-            for obj in pooled_subjects:
-                file.write(str(obj) + "\n")
+        # Save each subject's time series to a separate file
+        subject_id = id  # Assuming the first element is the subject ID
+        np.savetxt(f'{this_output_dir}/pooled/{subject_id}.csv', subject, delimiter=',')
+        np.savetxt(f'{this_output_dir}/shape/{subject_id}.csv', shape, delimiter=',')
+
 
 # extract whole brain time series using the HarvardOxford atlas
 def extract_whole_time_series(base_url, phenotype_file, atlas_name='HarvardOxford', atlas_dir='atlases', num_subjects=30):
@@ -146,7 +146,7 @@ def extract_whole_time_series(base_url, phenotype_file, atlas_name='HarvardOxfor
     pooled_subjects = get_pooled(base_url, abide_ids, phenotype, masker, num_subjects)
 
     # save the pooled data
-    save_data(pooled_subjects, atlas_name, num_subjects, 'output/roi_time_series')
+    save_data(pooled_subjects, atlas_name, num_subjects, abide_ids, 'output/roi_time_series')
 
 # extract cortical time series using the MSDL atlas
 def extract_cort_time_series(base_url, phenotype_file, atlas_name='MSDL', num_subjects=30):
@@ -164,7 +164,7 @@ def extract_cort_time_series(base_url, phenotype_file, atlas_name='MSDL', num_su
     pooled_subjects = get_pooled(base_url, abide_ids, phenotype, masker, num_subjects)
 
     # save the pooled data
-    save_data(pooled_subjects, atlas_name, num_subjects, 'output/roi_time_series')
+    save_data(pooled_subjects, atlas_name, num_subjects, abide_ids, 'output/roi_time_series')
 
 def main():
 
@@ -176,9 +176,9 @@ def main():
     phenotype_file = f"{working_dir}/datasets/abide/phenotypic/Phenotypic_V1_0b_preprocessed1.csv"
 
     # SET THE NUMBER OF SUBJECTS, MAX IS 884
-    num_subjects = 400  # You can change this to any number up to 884
+    num_subjects = 884  # You can change this to any number up to 884
     extract_cort_time_series(abide_url, phenotype_file, num_subjects=num_subjects)
-    extract_whole_time_series(abide_url, phenotype_file, num_subjects=num_subjects)
+    #extract_whole_time_series(abide_url, phenotype_file, num_subjects=num_subjects)
 
 
 if __name__ == "__main__":

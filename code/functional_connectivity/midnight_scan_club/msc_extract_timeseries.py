@@ -57,7 +57,7 @@ def get_masker(atlas, atlas_name):
         standardize_confounds="zscore_sample",
         memory="nilearn_cache",
         n_jobs=2,
-    )
+    ).fit()
         
     else:
         raise ValueError("make sure atlas name is correct")
@@ -106,28 +106,14 @@ def save_data(pooled_subject, atlas_name, file_ids, output_dir='output/roi_time_
         np.savetxt(f'{this_output_dir}/shape/{file_id}.csv', shape, delimiter=',')
 
 
-# extract whole brain time series using the HarvardOxford atlas
-def extract_whole_time_series(base_url, file_ids, atlas_name='HarvardOxford', atlas_dir='atlases'):
-    # fetch the atlas
-    atlas = fetch_atlas(atlas_name, atlas_dir=atlas_dir)
-
-    # create masker based on the atlas type
-    masker = get_masker(atlas, mask_type='whole')  
-
-    # get pooled subjects time series
-    pooled_subject = get_pooled(base_url, file_ids, masker)
-
-    # save the pooled data
-    save_data(pooled_subject, atlas_name, file_ids, 'output/roi_time_series')
-
 # extract cortical time series using the MSDL atlas
-def extract_cort_time_series(base_url, file_ids, atlas_name='MSDL', tasks="all_tasks", subject_id='MSC01', session='func01'):
+def extract_time_series(base_url, file_ids, atlas_name='MSDL', tasks="all_tasks", subject_id='MSC01', session='func01'):
 
     # fetch the atlas
     atlas = fetch_atlas(atlas_name)
 
     # create masker based on the atlas type
-    masker = get_masker(atlas, mask_type='cort')  
+    masker = get_masker(atlas, atlas_name)  
 
     # get pooled subjects time series
     pooled_subject = get_pooled(base_url, file_ids, masker, subject_id=subject_id, session=session)
@@ -144,9 +130,10 @@ def main():
     
     try_rest = False # just try running the rest condition
     tasks = "all_tasks"
+    atlas_name = 'Schaefer'
 
     # set the subject and session
-    subject_id = "MSC03"
+    subject_id = "MSC01"
     session = "func01"
 
     # CHANGE PATHS HERE
@@ -164,15 +151,14 @@ def main():
             file_ids = [x.strip() for x in file_ids]
         tasks = "rest"
     
-    run_all_sessions = False
+    run_all_sessions = True
     if run_all_sessions:
         all_sessions = ['func01', 'func02', 'func03', 'func04', 'func05', 'func06', 'func07', 'func08', 'func09', 'func10']
         for session in all_sessions[1:]:
             base_url = f"/mfs/io/groups/dmello/projects/cerebellum_reliability/derivatives/fmriprep/ds000224/sub-{subject_id}/ses-{session}/func"
-            extract_cort_time_series(base_url, file_ids, subject_id=subject_id, session=session, tasks=tasks)
+            extract_time_series(base_url, file_ids, subject_id=subject_id, atlas_name=atlas_name, session=session, tasks=tasks)
     else:
-        extract_cort_time_series(base_url, file_ids, subject_id=subject_id, session=session, tasks=tasks)
-    #extract_whole_time_series(abide_url, phenotype_file, num_subjects=num_subjects)
+        extract_time_series(base_url, file_ids, subject_id=subject_id, atlas_name=atlas_name, session=session, tasks=tasks)
 
 
 if __name__ == "__main__":
