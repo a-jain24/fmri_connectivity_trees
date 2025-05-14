@@ -1,6 +1,6 @@
 import nilearn
 from nilearn import datasets, plotting
-from nilearn.maskers import NiftiMapsMasker, NiftiLabelsMasker
+from nilearn.maskers import NiftiMapsMasker, NiftiLabelsMasker, MultiNiftiLabelsMasker
 import os
 import requests
 import csv
@@ -14,6 +14,8 @@ def fetch_atlas(atlas_name, atlas_dir=None):
 
     if atlas_name == 'HarvardOxford':
         atlas = datasets.fetch_atlas_harvard_oxford('sub-maxprob-thr25-1mm', data_dir=atlas_dir)
+    elif atlas_name == "Schaefer":
+        atlas = datasets.fetch_atlas_schaefer_2018(n_rois=100, yeo_networks=7, resolution_mm=1, data_dir=None, base_url=None, resume=True, verbose=1)
     elif atlas_name == 'MSDL':
         atlas = datasets.fetch_atlas_msdl()
     elif atlas_name == 'Cerebellum':
@@ -23,9 +25,9 @@ def fetch_atlas(atlas_name, atlas_dir=None):
         raise ValueError("Atlas not recognized. Please choose 'HarvardOxford', 'MSDL', or 'Cerebellum'.")
     return atlas
 
-def get_masker(atlas, mask_type='cort'):
+def get_masker(atlas, atlas_name):
 
-    if mask_type == 'cort':
+    if atlas_name == 'MSDL':
         masker = NiftiMapsMasker(
         atlas.maps,
         resampling_target="data",
@@ -38,7 +40,7 @@ def get_masker(atlas, mask_type='cort'):
     ).fit()
     
     # double check TR
-    elif mask_type == 'whole':
+    elif atlas_name == 'HarvardOxford':
         masker = NiftiLabelsMasker(
         atlas.maps,
         labels=atlas.labels,
@@ -48,8 +50,17 @@ def get_masker(atlas, mask_type='cort'):
         standardize="zscore_sample",
     ).fit()
         
+    elif atlas_name == 'Schaefer':
+        masker = MultiNiftiLabelsMasker(
+        labels_img=atlas.maps,  # Both hemispheres
+        standardize="zscore_sample",
+        standardize_confounds="zscore_sample",
+        memory="nilearn_cache",
+        n_jobs=2,
+    )
+        
     else:
-        raise ValueError("mask_type must be either 'cort' or 'whole'.")
+        raise ValueError("make sure atlas name is correct")
 
     return masker
 
