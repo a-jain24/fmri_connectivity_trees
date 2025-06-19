@@ -18,6 +18,9 @@ def fetch_atlas(atlas_name, atlas_dir=None):
         atlas = datasets.fetch_atlas_schaefer_2018(n_rois=100, yeo_networks=7, resolution_mm=1, data_dir=None, base_url=None, resume=True, verbose=1)
     elif atlas_name == 'MSDL':
         atlas = datasets.fetch_atlas_msdl()
+    elif atlas_name == 'Cerebellum':
+        # Assuming the cerebellum atlas is already downloaded and available locally
+        atlas = nib.load(os.path.join(atlas_dir, 'Cerebellum-MNIsegment-1segment.nii'))
     else:
         raise ValueError("Atlas not recognized. Please choose 'HarvardOxford', 'MSDL', or 'Cerebellum'.")
     return atlas
@@ -62,11 +65,11 @@ def get_masker(atlas, atlas_name):
     return masker
 
 # Function to construct the download URL
-def construct_url(base_url, file_id, subject_id='MSC01', session='func01'):
-    return f"{base_url}/s_sub-{subject_id}_ses-{session}_task-{file_id}_space-MNI152NLin2009cAsym_res-2_desc-preproc_bold.nii.gz"
+def construct_url(base_url, file_id, subject_id='L010', session='01'):
+    return f"{base_url}/sub-{subject_id}_ses-{session}_task-{file_id}_space-MNI152NLin2009cAsym_desc-preproc_bold.nii.gz"
 
 # get pooled subject time series based on the atlas rois
-def get_pooled(base_url, file_ids, masker, subject_id='MSC01', session='func01'):
+def get_pooled(base_url, file_ids, masker, subject_id='L010', session='01'):
 
     pooled_subject = []
 
@@ -80,7 +83,7 @@ def get_pooled(base_url, file_ids, masker, subject_id='MSC01', session='func01')
     
     return pooled_subject
 
-def save_data(pooled_subject, atlas_name, file_ids, output_dir='output/roi_time_series', subject_id="MSC01", tasks="all_tasks", session='func01'):
+def save_data(pooled_subject, atlas_name, file_ids, output_dir='output/roi_time_series', subject_id="L010", tasks="all_tasks", session='01'):
 
     this_output_dir = f'{output_dir}/{subject_id}/{session}/{atlas_name}/{tasks}'
 
@@ -121,45 +124,48 @@ def extract_time_series(base_url, file_ids, atlas_name='MSDL', tasks="all_tasks"
 def main():
 
     # set the working directory to fmri_connectivity_trees root directory
-    working_dir = '/mfs/io/groups/dmello/projects/dynamric/fmri_connectivity_trees/code/functional_connectivity/midnight_scan_club'
+    working_dir = '/mfs/io/groups/dmello/projects/dynamric/fmri_connectivity_trees/code/functional_connectivity/listen'
     os.chdir(working_dir)
     
-    
-    try_rest = False # just try running the rest condition
-    tasks = "all_tasks"
+    tasks = "stories"
     atlas_name = 'Schaefer'
 
     # set the subject and session
-    subject_id = "MSC01"
-    session = "func01"
+    subject_id = "L012"
+    session = "01"
 
     # CHANGE PATHS HERE
-    base_url = f"/mfs/io/groups/dmello/projects/cerebellum_reliability/derivatives/fmriprep/ds000224/sub-{subject_id}/ses-{session}/func"
+    base_url = f"/mfs/io/groups/dmello/projects/listen/derivatives/fmriprep/sub-{subject_id}/ses-{session}/func"
 
-    ids_path = "/mfs/io/groups/dmello/projects/dynamric/fmri_connectivity_trees/datasets/midnight_scan_club/msc_file_ids.txt"
-    with open(ids_path, 'r') as f:
-            file_ids = f.readlines()
-            file_ids = [x.strip() for x in file_ids]
+    stories = {}
     
-    if try_rest:
-        ids_path = "/mfs/io/groups/dmello/projects/dynamric/fmri_connectivity_trees/datasets/midnight_scan_club/msc_rest_id.txt"
-        with open(ids_path, 'r') as f:
+    ids_path_1 = f"/mfs/io/groups/dmello/projects/dynamric/fmri_connectivity_trees/datasets/listen/listen_file_ids_ses-01.txt"
+    with open(ids_path_1, 'r') as f:
             file_ids = f.readlines()
             file_ids = [x.strip() for x in file_ids]
-        tasks = "rest"
+            stories['01'] = file_ids
+    
+    ids_path_2 = f"/mfs/io/groups/dmello/projects/dynamric/fmri_connectivity_trees/datasets/listen/listen_file_ids_ses-02.txt"
+    with open(ids_path_2, 'r') as f:
+            file_ids = f.readlines()
+            file_ids = [x.strip() for x in file_ids]
+            stories['02'] = file_ids
+    
+    # optional: set specific stories manually
+    set_stories = False
+    if set_stories:
+        stories['01'] = ['alternateithicatom']
+        stories['02'] = ['undertheinfluence']
     
     run_all_sessions = True
     if run_all_sessions:
-        all_sessions = ['func01', 'func02', 'func03', 'func04', 'func05', 'func06', 'func07', 'func08', 'func09', 'func10']
-        for session in all_sessions[1:]:
-            base_url = f"/mfs/io/groups/dmello/projects/cerebellum_reliability/derivatives/fmriprep/ds000224/sub-{subject_id}/ses-{session}/func"
-            extract_time_series(base_url, file_ids, subject_id=subject_id, atlas_name=atlas_name, session=session, tasks=tasks)
+        all_sessions = ['01', '02']
+        for session in all_sessions:
+            base_url = f"/mfs/io/groups/dmello/projects/listen/derivatives/fmriprep/sub-{subject_id}/ses-{session}/func"
+            extract_time_series(base_url, stories[session], subject_id=subject_id, atlas_name=atlas_name, session=session, tasks=tasks)
     else:
         extract_time_series(base_url, file_ids, subject_id=subject_id, atlas_name=atlas_name, session=session, tasks=tasks)
 
 
 if __name__ == "__main__":
     main()
-
-
-
