@@ -167,7 +167,17 @@ def main():
     tasks = "all_tasks"
     atlas_name = 'SUIT'
 
-    subject_ids = ["MSC01"]  # change this to the subjects you want to run
+    subject_ids = [
+                    # "MSC01",
+                    "MSC02",
+                    "MSC03",
+                    "MSC04",
+                    "MSC05",
+                    "MSC06",
+                    "MSC07",
+                    "MSC08",
+                    "MSC09",
+                    "MSC10"]  # change this to the subjects you want to run
     session = "func01" # set if only running one session
 
     # CHANGE PATHS HERE
@@ -189,12 +199,16 @@ def main():
     for subject_id in subject_ids:
         if run_all_sessions:
             all_sessions = [
-                            # 'func01', 
+                            'func01', 
                             'func02', 
-                            'func03', 'func04', 'func05', 
+                            'func03', 
+                            'func04', 
+                            'func05', 
                             'func06', 
                             'func07', 
-                            'func08', 'func09', 'func10'
+                            'func08', 
+                            'func09', 
+                            'func10'
                             ]
             for session in all_sessions:
                 base_url = f"/mfs/io/groups/dmello/projects/cerebellum_reliability/derivatives/fmriprep/ds000224/sub-{subject_id}/ses-{session}/func"
