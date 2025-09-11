@@ -2,7 +2,8 @@ import os
 import numpy as np
 import torch
 
-device = torch.device("gpu" if torch.cuda.is_available() else "cpu")
+# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cpu")
 print(f'Using device: {device}')
 
 # concatenate timeseries to get a single timeseries for each subject
@@ -48,9 +49,9 @@ def combine_timeseries(subjects, timeseries_array, use_torch=True):
     
     concat_timeseries = {}
     for subject in subjects:
-        concat_timeseries[subject] = timeseries_array[0][subject].cpu().numpy()
+        concat_timeseries[subject] = (timeseries_array[0])[subject].cpu().numpy()
         for timeseries in timeseries_array[1:]:
-            concat_timeseries[subject] = np.concatenate((concat_timeseries[subject].cpu().numpy(), timeseries[subject].cpu().numpy()), axis=0)
+            concat_timeseries[subject] = np.concatenate((concat_timeseries[subject], timeseries[subject].cpu().numpy()), axis=0)
 
     if use_torch:
         for subject in concat_timeseries:
@@ -198,10 +199,10 @@ def get_mi_matrices(atlases, subjects, tasks, sessions, base_dir):
                 shape_path = f'{base_dir}/code/functional_connectivity/midnight_scan_club/output/roi_time_series/{subject}/{session}/{atlas}/all_tasks/shape/'
                 pooled_path = f'{base_dir}/code/functional_connectivity/midnight_scan_club/output/roi_time_series/{subject}/{session}/{atlas}/all_tasks/pooled/'
                 timeseries[subject] = timeseries[subject] + get_timeseries(tasks, shape_path, pooled_path)
-        timeseries_array.append(timeseries)
+        
+        timeseries_array.append(get_concat(timeseries))
 
     concat_timeseries = combine_timeseries(subjects, timeseries_array)
-    print(concat_timeseries['MSC04'].shape)
 
     for subject in subjects:
         for task in tasks:
@@ -217,41 +218,46 @@ def main():
     home_base_dir = '/Users/aj/dmello_lab/fmri_connectivity_trees' # directory where repository lives at home computer
     lab_base_dir = '/Users/ajjain/Downloads/Code/fmri_connectivity_trees' # directory where repository lives at lab computer
     utd_base_dir = '/mfs/io/groups/dmello/projects/dynamric/fmri_connectivity_trees'
+    biohpc_base_dir = '/project/greencenter/Lin_lab/s229618/fmri_connectivity_trees'
 
     # set base directory depending on where the code is being run
     base_dir = home_base_dir if os.path.exists(home_base_dir) else lab_base_dir
     base_dir = utd_base_dir if os.path.exists(utd_base_dir) else base_dir
+    base_dir = biohpc_base_dir if os.path.exists(biohpc_base_dir) else base_dir
 
     os.chdir(base_dir)
     
     # path for shapes and pooled timeseries
     subjects = [
-                'MSC01',
+                # 'MSC01',
                 # 'MSC02', 
                 # 'MSC03',
                 # 'MSC04',
                 # 'MSC05', 
-                # 'MSC06',
-                # 'MSC07', 
-                # 'MSC08',
-                # 'MSC09',
+                'MSC06',
+                'MSC07', 
+                'MSC08',
+                'MSC09',
                 # 'MSC10'
                 ]
     
     sessions = [
         'func01', 
-        # 'func02', 
-        # 'func03', 
-        # 'func04', 
-        # 'func05', 
-        # 'func06', 
-        # 'func07', 
-        # 'func08', 
-        # 'func09', 
-        # 'func10'
+        'func02', 
+        'func03', 
+        'func04', 
+        'func05', 
+        'func06', 
+        'func07', 
+        'func08', 
+        'func09', 
+        'func10'
         ]
     
-    tasks = ['rest']
+    tasks = [
+        'motor_run-01', 
+        'motor_run-02'
+        ]
     atlases = ['glasser360', 'SUIT', 'Thalamus', 'Brainstem']
 
     get_mi_matrices(atlases, subjects, tasks, sessions, base_dir)
