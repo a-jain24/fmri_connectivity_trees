@@ -65,13 +65,13 @@ def combine_cort_and_cereb(cort_concat_timeseries, cereb_concat_timeseries, use_
 def combine_timeseries(subjects, timeseries_array, use_torch=True):
 
     if len(timeseries_array) < 2:
-        return get_concat(timeseries_array[0], use_torch=use_torch)
+        return timeseries_array[0]
     
     concat_timeseries = {}
     for subject in subjects:
-        concat_timeseries[subject] = timeseries_array[0][subject].cpu().numpy()
+        concat_timeseries[subject] = (timeseries_array[0])[subject].cpu().numpy()
         for timeseries in timeseries_array[1:]:
-            concat_timeseries[subject] = np.concatenate((concat_timeseries[subject].cpu().numpy(), timeseries[subject].cpu().numpy()), axis=0)
+            concat_timeseries[subject] = np.concatenate((concat_timeseries[subject], timeseries[subject].cpu().numpy()), axis=0)
 
     if use_torch:
         for subject in concat_timeseries:
@@ -237,7 +237,7 @@ def get_mi_matrices(atlases, subjects, tasks, sessions, base_dir):
                 shape_path = f'{base_dir}/code/functional_connectivity/midnight_scan_club/output/roi_time_series/{subject}/{session}/{atlas}/all_tasks/shape/'
                 pooled_path = f'{base_dir}/code/functional_connectivity/midnight_scan_club/output/roi_time_series/{subject}/{session}/{atlas}/all_tasks/pooled/'
                 timeseries[subject] = timeseries[subject] + get_timeseries(tasks, shape_path, pooled_path)
-        timeseries_array.append(timeseries)
+        timeseries_array.append(get_concat(timeseries, use_torch=True))
 
     concat_timeseries = combine_timeseries(subjects, timeseries_array)
     print(concat_timeseries['MSC04'].shape)
