@@ -24,11 +24,12 @@ from sklearn.metrics import accuracy_score
 from sklearn.naive_bayes import GaussianNB
 import torch
 device = torch.device("gpu" if torch.cuda.is_available() else "cpu")
+print(f'Using device: {device}')
 
 # concatenate timeseries to get a single timeseries for each subject
-def get_timeseries(ids, cort_shape_path, cort_pooled_path):
+def get_timeseries(tasks, cort_shape_path, cort_pooled_path):
     timeseries = []
-    for id in ids:
+    for id in tasks:
 
         # load the shape and pooled timeseries
         shape = np.loadtxt(f'{cort_shape_path}/{id}.csv', delimiter=',').astype(int)
@@ -60,6 +61,23 @@ def combine_cort_and_cereb(cort_concat_timeseries, cereb_concat_timeseries, use_
         for subject in timeseries:
             timeseries[subject] = torch.tensor(np.float32(timeseries[subject]), device=device)
     return timeseries
+
+def combine_timeseries(subjects, timeseries_array, use_torch=True):
+
+    if len(timeseries_array) < 2:
+        return get_concat(timeseries_array[0], use_torch=use_torch)
+    
+    concat_timeseries = {}
+    for subject in subjects:
+        concat_timeseries[subject] = timeseries_array[0][subject].cpu().numpy()
+        for timeseries in timeseries_array[1:]:
+            concat_timeseries[subject] = np.concatenate((concat_timeseries[subject].cpu().numpy(), timeseries[subject].cpu().numpy()), axis=0)
+
+    if use_torch:
+        for subject in concat_timeseries:
+            concat_timeseries[subject] = torch.tensor(np.float32(concat_timeseries[subject]), device=device)
+
+    return concat_timeseries
 
 def discretize_time_series(timeseries, num_bins=10):
     """
@@ -201,24 +219,50 @@ def plot_connectome(cov_matrix, coords, title='connectome', edge_threshold="0%",
     )
     plt.show()
 
+def get_mi_matrices(atlases, subjects, tasks, sessions, base_dir):
+
+    timeseries_array = []
+    atlas_name = ''
+
+    for atlas in atlases:
+
+        atlas_name = atlas_name + '_' + atlas if atlas_name != '' else atlas
+
+        timeseries = {}
+        for subject in subjects:
+            shape_path = f'{base_dir}/code/functional_connectivity/midnight_scan_club/output/roi_time_series/{subject}/func01/{atlas}/all_tasks/shape/'
+            pooled_path = f'{base_dir}/code/functional_connectivity/midnight_scan_club/output/roi_time_series/{subject}/func01/{atlas}/all_tasks/pooled/'
+            timeseries[subject] = get_timeseries(tasks, shape_path, pooled_path)
+            for session in sessions[1:]:
+                shape_path = f'{base_dir}/code/functional_connectivity/midnight_scan_club/output/roi_time_series/{subject}/{session}/{atlas}/all_tasks/shape/'
+                pooled_path = f'{base_dir}/code/functional_connectivity/midnight_scan_club/output/roi_time_series/{subject}/{session}/{atlas}/all_tasks/pooled/'
+                timeseries[subject] = timeseries[subject] + get_timeseries(tasks, shape_path, pooled_path)
+        timeseries_array.append(timeseries)
+
+    concat_timeseries = combine_timeseries(subjects, timeseries_array)
+    print(concat_timeseries['MSC04'].shape)
+
+    for subject in subjects:
+        for task in tasks:
+            print(f'Computing MI for subject {subject}, task {task}, atlases {atlas_name}')
+            mi, joint_probs, product_of_marginals = pairwise_roi_mutual_information(concat_timeseries[subject], num_bins=100)
+            save_data(mi, base_dir=base_dir, subject=subject, task=task, atlas=atlas, num_bins=100, atlas_subdir=atlas_name)
+            save_data(joint_probs, base_dir=base_dir, subject=subject, measure='joint_probs', task=task, atlas=atlas, atlas_subdir=atlas_name, skl=False, num_bins=100)
+            save_data(product_of_marginals, base_dir=base_dir, subject=subject, measure='product_of_marginals', task=task, atlas=atlas, atlas_subdir=atlas_name, skl=False, num_bins=100)
+
 def main():
 
     # set the working directory to fmri_connectivity_trees root directory
-    base_dir = '/mfs/io/groups/dmello/projects/dynamric/fmri_connectivity_trees/code/functional_connectivity/midnight_scan_club'
+    home_base_dir = '/Users/aj/dmello_lab/fmri_connectivity_trees' # directory where repository lives at home computer
+    lab_base_dir = '/Users/ajjain/Downloads/Code/fmri_connectivity_trees' # directory where repository lives at lab computer
+    utd_base_dir = '/mfs/io/groups/dmello/projects/dynamric/fmri_connectivity_trees/code/functional_connectivity/midnight_scan_club'
+
+    # set base directory depending on where the code is being run
+    base_dir = home_base_dir if os.path.exists(home_base_dir) else lab_base_dir
+    base_dir = utd_base_dir if os.path.exists(utd_base_dir) else base_dir
+
     os.chdir(base_dir)
     
-    # get schaefer
-    # schaefer = datasets.fetch_atlas_schaefer_2018(n_rois=100, yeo_networks=7, resolution_mm=1, data_dir=None, base_url=None, resume=True, verbose=1)
-    # schaefer_coords = plotting.find_parcellation_cut_coords(labels_img=schaefer.maps)
-
-    # get suit
-    suit_labels = pd.read_csv(f'{base_dir}/atlases/suit/atl-Anatom.tsv', sep='\t')
-
-    # get glasser labels
-    file_path = f'{base_dir}/atlases/glasser360/glasser360NodeNames.txt'
-    with open(file_path, 'r') as file:
-        glasser_labels = file.readlines()
-
     # path for shapes and pooled timeseries
     subjects = [
                 'MSC01',
@@ -233,49 +277,10 @@ def main():
                 'MSC10'
                 ]
     sessions = ['func01', 'func02', 'func03', 'func04', 'func05', 'func06', 'func07', 'func08', 'func09', 'func10']
-    ids = ['rest']
+    tasks = ['rest']
+    atlases = ['glasser360', 'SUIT', 'Thalamus', 'Brainstem']
 
-    atlas_subdir = "glasser360"
-
-    atlas = 'glasser360'
-
-    cort_timeseries = {}
-    for subject in subjects:
-        cort_shape_path = f'{base_dir}/code/functional_connectivity/midnight_scan_club/output/roi_time_series/{subject}/func01/{atlas}/all_tasks/shape/'
-        cort_pooled_path = f'{base_dir}/code/functional_connectivity/midnight_scan_club/output/roi_time_series/{subject}/func01/{atlas}/all_tasks/pooled/'
-        cort_timeseries[subject] = get_timeseries(ids, cort_shape_path, cort_pooled_path)
-        for session in sessions[1:]:
-            cort_shape_path = f'{base_dir}/code/functional_connectivity/midnight_scan_club/output/roi_time_series/{subject}/{session}/{atlas}/all_tasks/shape/'
-            cort_pooled_path = f'{base_dir}/code/functional_connectivity/midnight_scan_club/output/roi_time_series/{subject}/{session}/{atlas}/all_tasks/pooled/'
-            cort_timeseries[subject] = cort_timeseries[subject] + get_timeseries(ids, cort_shape_path, cort_pooled_path)
-
-    cereb_timeseries = {}
-    atlas = 'SUIT'
-    for subject in subjects:
-        cereb_shape_path = f'{base_dir}/code/functional_connectivity/midnight_scan_club/output/roi_time_series/{subject}/func01/{atlas}/all_tasks/shape/'
-        cereb_pooled_path = f'{base_dir}/code/functional_connectivity/midnight_scan_club/output/roi_time_series/{subject}/func01/{atlas}/all_tasks/pooled/'
-        cereb_timeseries[subject] = get_timeseries(ids, cereb_shape_path, cereb_pooled_path)
-        for session in sessions[1:]:
-            cereb_shape_path = f'{base_dir}/code/functional_connectivity/midnight_scan_club/output/roi_time_series/{subject}/{session}/{atlas}/all_tasks/shape/'
-            cereb_pooled_path = f'{base_dir}/code/functional_connectivity/midnight_scan_club/output/roi_time_series/{subject}/{session}/{atlas}/all_tasks/pooled/'
-            cereb_timeseries[subject] = cereb_timeseries[subject] + get_timeseries(ids, cereb_shape_path, cereb_pooled_path)
-    
-    cort_concat_timeseries = get_concat(cort_timeseries)
-    print(cort_concat_timeseries['MSC04'].shape)
-    
-    cereb_concat_timeseries = get_concat(cereb_timeseries)
-    print(cereb_concat_timeseries['MSC04'].shape)
-    
-    concat_timeseries = combine_cort_and_cereb(cort_concat_timeseries, cereb_concat_timeseries)
-    print(concat_timeseries['MSC04'].shape)
-    
-    atlas_subdir = "glasser_suit"
-    atlas = 'glasser_suit'
-    for subject in subjects:
-        mi, joint_probs, product_of_marginals = pairwise_roi_mutual_information(concat_timeseries[subject], num_bins=100)
-        save_data(mi, base_dir=base_dir, subject=subject, task='rest', atlas=atlas, num_bins=100, atlas_subdir=atlas_subdir)
-        save_data(joint_probs, base_dir=base_dir, subject=subject, measure='joint_probs', task='rest', atlas=atlas, atlas_subdir=atlas_subdir, skl=False, num_bins=100)
-        save_data(product_of_marginals, base_dir=base_dir, subject=subject, measure='product_of_marginals', task='rest', atlas=atlas, atlas_subdir=atlas_subdir, skl=False, num_bins=100)
+    get_mi_matrices(atlases, subjects, tasks, sessions, base_dir)
 
 if __name__ == "__main__":
     main()
