@@ -1,28 +1,7 @@
-import nilearn
-from nilearn import datasets, plotting
-from nilearn.connectome import ConnectivityMeasure
-from nilearn.maskers import MultiNiftiLabelsMasker
 import os
-import requests
-import csv
-import pandas as pd
-import nibabel as nib
 import numpy as np
-from matplotlib import pyplot as plt
-import matplotlib.patches as mpatches
-import networkx as nx
-import scipy
-from scipy.stats import multivariate_normal
-from scipy.spatial.distance import pdist, squareform
-from networkx.drawing.nx_agraph import graphviz_layout
-from sklearn.metrics.cluster import mutual_info_score
-from sklearn.feature_selection import mutual_info_regression
-from scipy.sparse.csgraph import minimum_spanning_tree
-from collections import deque, defaultdict
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score
-from sklearn.naive_bayes import GaussianNB
 import torch
+
 device = torch.device("gpu" if torch.cuda.is_available() else "cpu")
 print(f'Using device: {device}')
 
@@ -201,26 +180,8 @@ def load_data(subjects=['MSC01'], base_dir='/mfs/io/groups/dmello/projects/dynam
         data[subject] = np.load(f'{data_path}/{file_name}.npy')
     return data
 
-def plot_connectome(cov_matrix, coords, title='connectome', edge_threshold="0%", edge_vmin=0, edge_vmax=1):
-    """
-    Plot the connectome using the mean correlation matrix and coordinates.
-    """
-    # Plotting the connectome
-    plotting.plot_connectome(
-        cov_matrix,
-        coords,
-        title=title,
-        edge_vmin = edge_vmin,
-        edge_vmax = edge_vmax,
-        edge_cmap='cold_hot',
-        edge_threshold=edge_threshold,  # Only plot edges above the 90th percentile
-        colorbar=True,
-        node_size=10,
-    )
-    plt.show()
 
 def get_mi_matrices(atlases, subjects, tasks, sessions, base_dir):
-
     timeseries_array = []
     atlas_name = ''
 
@@ -255,7 +216,7 @@ def main():
     # set the working directory to fmri_connectivity_trees root directory
     home_base_dir = '/Users/aj/dmello_lab/fmri_connectivity_trees' # directory where repository lives at home computer
     lab_base_dir = '/Users/ajjain/Downloads/Code/fmri_connectivity_trees' # directory where repository lives at lab computer
-    utd_base_dir = '/mfs/io/groups/dmello/projects/dynamric/fmri_connectivity_trees/code/functional_connectivity/midnight_scan_club'
+    utd_base_dir = '/mfs/io/groups/dmello/projects/dynamric/fmri_connectivity_trees'
 
     # set base directory depending on where the code is being run
     base_dir = home_base_dir if os.path.exists(home_base_dir) else lab_base_dir
@@ -266,17 +227,30 @@ def main():
     # path for shapes and pooled timeseries
     subjects = [
                 'MSC01',
-                'MSC02', 
-                'MSC03',
-                'MSC04',
-                'MSC05', 
-                'MSC06',
-                'MSC07', 
-                'MSC08',
-                'MSC09',
-                'MSC10'
+                # 'MSC02', 
+                # 'MSC03',
+                # 'MSC04',
+                # 'MSC05', 
+                # 'MSC06',
+                # 'MSC07', 
+                # 'MSC08',
+                # 'MSC09',
+                # 'MSC10'
                 ]
-    sessions = ['func01', 'func02', 'func03', 'func04', 'func05', 'func06', 'func07', 'func08', 'func09', 'func10']
+    
+    sessions = [
+        'func01', 
+        # 'func02', 
+        # 'func03', 
+        # 'func04', 
+        # 'func05', 
+        # 'func06', 
+        # 'func07', 
+        # 'func08', 
+        # 'func09', 
+        # 'func10'
+        ]
+    
     tasks = ['rest']
     atlases = ['glasser360', 'SUIT', 'Thalamus', 'Brainstem']
 
