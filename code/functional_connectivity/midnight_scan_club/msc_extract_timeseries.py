@@ -229,7 +229,7 @@ def get_pooled(base_url, file_ids, masker, tasks='rest', atlas_name='glasser360'
         # concatenate all subregion time series along the ROI axis
         pooled_subject = np.array(pooled_subject_dict[list(pooled_subject_dict.keys())[0]])  # initialize with first key
         for key in list(pooled_subject_dict.keys())[1:]:
-            pooled_subject = np.concatenate((pooled_subject, np.array(pooled_subject_dict[key])), axis=1)
+            pooled_subject = np.concatenate((pooled_subject, np.array(pooled_subject_dict[key])), axis=2)
 
     # for all single self-contained atlases
     else:
@@ -323,10 +323,10 @@ def main():
     atlas_name = 'Morel_All'  # change this to the atlas you want to use
 
     subject_ids = [
-                    # "MSC01",
+                    "MSC01",
                     # "MSC02",
                     # "MSC03",
-                    "MSC04",
+                    # "MSC04",
                     # "MSC05",
                     # "MSC06",
                     # "MSC07",
@@ -357,8 +357,8 @@ def main():
             all_sessions = [
                             # 'func01', 
                             # 'func02', 
-                            'func03', 
-                            'func04', 
+                            # 'func03', 
+                            # 'func04', 
                             'func05', 
                             'func06', 
                             'func07', 
