@@ -19,7 +19,7 @@ def fetch_atlas(atlas_name, atlas_dir=None):
     if atlas_name == 'HarvardOxford':
         atlas = datasets.fetch_atlas_harvard_oxford('sub-maxprob-thr25-1mm', data_dir=atlas_dir)
     elif atlas_name == "Schaefer":
-        atlas = datasets.fetch_atlas_schaefer_2018(n_rois=100, yeo_networks=17, resolution_mm=2, data_dir=None, base_url=None, resume=True, verbose=1)
+        atlas = datasets.fetch_atlas_schaefer_2018(n_rois=1000, yeo_networks=17, resolution_mm=2, data_dir=None, base_url=None, resume=True, verbose=1)
     elif atlas_name == 'MSDL':
         atlas = datasets.fetch_atlas_msdl()
     elif atlas_name == 'glasser360':
@@ -383,6 +383,8 @@ def extract_time_series(base_url, file_ids, atlas_name='MSDL', tasks="all_tasks"
     else:
         raise ValueError("processing_mode must be 'sequential' or 'chunked'")
 
+    atlas_name = "schaefer1000_17net"
+
     save_data(pooled_subject, atlas_name, file_ids, 'output/roi_time_series', tasks=tasks, 
              subject_id=subject_id, session=session)
 
@@ -407,12 +409,12 @@ def main():
         # 'MSC01', 
         # 'MSC02', 
         # 'MSC03', 
-        'MSC04', 
+        # 'MSC04', 
         # 'MSC05', 
         # 'MSC06', 
         # 'MSC07', 
         # 'MSC08', 
-        # 'MSC09', 
+        'MSC09', 
         # 'MSC10'
     ]
     session = "func01"
@@ -436,12 +438,12 @@ def main():
                 # 'func02',
                 # 'func03', 
                 # 'func04', 
-                'func05', 
-                'func06', 
-                'func07', 
+                # 'func05', 
+                # 'func06', 
+                # 'func07', 
                 'func08', 
-                'func09', 
-                'func10'
+                # 'func09', 
+                # 'func10'
                 ]
             for session in all_sessions:
                 base_url = f"/mfs/io/groups/dmello/projects/cerebellum_reliability/derivatives/fmriprep/ds000224/sub-{subject_id}/ses-{session}/func"
