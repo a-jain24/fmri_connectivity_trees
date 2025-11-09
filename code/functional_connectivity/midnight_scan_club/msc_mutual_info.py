@@ -304,15 +304,15 @@ def main():
     
     # path for shapes and pooled timeseries
     subjects = [
-                'MSC01',
+                # 'MSC01',
                 # 'MSC02', 
                 # 'MSC03',
-                # 'MSC04',
+                'MSC04',
                 # 'MSC05', 
                 # 'MSC06',
-                # 'MSC07', 
+                'MSC07', 
                 # 'MSC08',
-                # 'MSC09',
+                'MSC09',
                 # 'MSC10'
                 ]
     
