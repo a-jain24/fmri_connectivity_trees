@@ -1,6 +1,7 @@
 import nilearn
 from nilearn import datasets, plotting
-from nilearn.maskers import NiftiMapsMasker, NiftiLabelsMasker
+from nilearn.maskers import NiftiMasker, NiftiMapsMasker, NiftiLabelsMasker, MultiNiftiLabelsMasker
+from nilearn.interfaces.fmriprep import load_confounds
 import os
 import requests
 import csv
@@ -8,37 +9,59 @@ import pandas as pd
 import nibabel as nib
 import numpy as np
 from matplotlib import pyplot as plt
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+import multiprocessing
+from functools import partial
 
 # fetch different atlases
 def fetch_atlas(atlas_name, atlas_dir=None):
 
     if atlas_name == 'HarvardOxford':
         atlas = datasets.fetch_atlas_harvard_oxford('sub-maxprob-thr25-1mm', data_dir=atlas_dir)
+    elif atlas_name == "Schaefer":
+        atlas = datasets.fetch_atlas_schaefer_2018(n_rois=1000, yeo_networks=17, resolution_mm=2, data_dir=None, base_url=None, resume=True, verbose=1)
     elif atlas_name == 'MSDL':
         atlas = datasets.fetch_atlas_msdl()
-    elif atlas_name == 'Cerebellum':
-        # Assuming the cerebellum atlas is already downloaded and available locally
-        atlas = nib.load(os.path.join(atlas_dir, 'Cerebellum-MNIsegment-1segment.nii'))
+    elif atlas_name == 'glasser360':
+        atlas = {}
+        atlas['img_path'] = '/mfs/io/groups/dmello/projects/dynamric/fmri_connectivity_trees/atlases/glasser360/glasser360MNI.nii.gz'
+        atlas['labels_path'] = '/mfs/io/groups/dmello/projects/dynamric/fmri_connectivity_trees/atlases/glasser360/glasser360NodeNames.txt'
+    elif atlas_name == 'SUIT':
+        atlas = {}
+        atlas['img_path'] = '/mfs/io/groups/dmello/projects/egcerebellum/code/connectivity/correlation/parcellations/atl-Anatom_space-MNI_dseg_resamplespace-MNI152NLin2009cAsym_res-2.nii'
+        atlas['lut_path'] = '/mfs/io/groups/dmello/projects/egcerebellum/code/connectivity/correlation/parcellations/atl-Anatom.tsv'
+    elif atlas_name == 'Morel_Left_Global_Thalamus':
+        atlas = {}
+        atlas['img_path'] = '/groups/dmello/projects/dynamric/fmri_connectivity_trees/atlases/MorelAtlasMNI152/left-vols-1mm/global.nii.gz'
+    elif atlas_name == 'Morel_Right_Global_Thalamus':
+        atlas = {}
+        atlas['img_path'] = '/groups/dmello/projects/dynamric/fmri_connectivity_trees/atlases/MorelAtlasMNI152/right-vols-1mm/global.nii.gz'
+    elif atlas_name == 'Morel_All':
+        atlas = {}
+        atlas['img_path'] = f'/mfs/io/groups/dmello/projects/dynamric/fmri_connectivity_trees/atlases/MorelAtlasMNI152'
+
     else:
-        raise ValueError("Atlas not recognized. Please choose 'HarvardOxford', 'MSDL', or 'Cerebellum'.")
+        raise ValueError("Atlas not recognized.")
     return atlas
 
-def get_masker(atlas, mask_type='cort'):
+def get_masker(atlas, atlas_name, use_memory_cache=True):
 
-    if mask_type == 'cort':
+    # Set memory parameter based on flag
+    memory_param = "nilearn_cache" if use_memory_cache else None
+
+    if atlas_name == 'MSDL':
         masker = NiftiMapsMasker(
         atlas.maps,
         resampling_target="data",
         t_r=2,
         detrend=True,
-        memory="nilearn_cache",
+        memory=memory_param,
         memory_level=1,
         standardize="zscore_sample",
         standardize_confounds="zscore_sample",
-    ).fit()
+    )
     
-    # double check TR
-    elif mask_type == 'whole':
+    elif atlas_name == 'HarvardOxford':
         masker = NiftiLabelsMasker(
         atlas.maps,
         labels=atlas.labels,
@@ -46,10 +69,93 @@ def get_masker(atlas, mask_type='cort'):
         t_r=2,
         detrend=True,
         standardize="zscore_sample",
-    ).fit()
+    )
+    
         
+    elif atlas_name == 'Schaefer':
+        masker = MultiNiftiLabelsMasker(
+        labels_img=atlas.maps,
+        resampling_target="data",
+        standardize="zscore_sample",
+        standardize_confounds="zscore_sample",
+        memory=memory_param,
+        n_jobs=2,
+    )
+    elif atlas_name == 'SUIT':
+        masker = MultiNiftiLabelsMasker(
+        labels_img = atlas['img_path'],
+        lut = atlas['lut_path'],
+        resampling_target="data",
+        standardize="zscore_sample",
+        standardize_confounds="zscore_sample",
+        memory=memory_param,
+        n_jobs=2,
+    )
+    
+    elif atlas_name == 'glasser360':
+        masker = MultiNiftiLabelsMasker(
+        labels_img = atlas['img_path'],
+        resampling_target="data",
+        detrend=True
+        standardize="zscore_sample",
+        standardize_confounds="zscore_sample",
+        memory=memory_param,
+        n_jobs=2,
+    )
+    
+    elif atlas_name == 'Morel_Left_Global_Thalamus':
+        masker = NiftiLabelsMasker(
+        labels_img=atlas['img_path'],
+        resampling_target="data",
+        t_r=2,
+        detrend=True,
+        memory=memory_param,
+        memory_level=1,
+        standardize="zscore_sample",
+        standardize_confounds=True,
+        interpolation="nearest"
+    )
+    
+    elif atlas_name == 'Morel_Right_Global_Thalamus':
+        masker = NiftiLabelsMasker(
+        labels_img=atlas['img_path'],
+        resampling_target="data",
+        t_r=2,
+        detrend=True,
+        memory=memory_param,
+        memory_level=1,
+        standardize="zscore_sample",
+        standardize_confounds="zscore_sample",
+        interpolation="nearest"
+    )
+    
+    # collect all subregions in morel thalamic atlas as a dictionary of maskers
+    elif atlas_name == 'Morel_All':
+
+        maskers = {}
+        for side in ['left', 'right']:
+            path = f'{atlas['img_path']}/{side}-vols-1mm'
+            for sub_atlas in os.listdir(path):
+
+                if sub_atlas.endswith('.nii.gz'):
+                    masker = NiftiLabelsMasker(
+                        labels_img=f'{path}/{sub_atlas}',
+                        resampling_target="data",
+                        t_r=2,
+                        detrend=True,
+                        memory=memory_param,
+                        memory_level=1,
+                        standardize="zscore_sample",
+                        standardize_confounds="zscore_sample",
+                        interpolation="nearest"
+                    )
+
+                    maskers[f'{side}_{sub_atlas.replace('.nii.gz', '')}'] = masker
+            
+        masker = maskers
+ 
     else:
-        raise ValueError("mask_type must be either 'cort' or 'whole'.")
+        raise ValueError("make sure atlas name is correct")
 
     return masker
 

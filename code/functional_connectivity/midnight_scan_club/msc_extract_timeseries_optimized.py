@@ -96,6 +96,7 @@ def get_masker(atlas, atlas_name, use_memory_cache=True):
         masker = MultiNiftiLabelsMasker(
         labels_img = atlas['img_path'],
         resampling_target="data",
+        detrend=True
         standardize="zscore_sample",
         standardize_confounds="zscore_sample",
         memory=memory_param,
@@ -412,9 +413,9 @@ def main():
         # 'MSC04', 
         # 'MSC05', 
         # 'MSC06', 
-        # 'MSC07', 
+        'MSC07', 
         # 'MSC08', 
-        'MSC09', 
+        # 'MSC09', 
         # 'MSC10'
     ]
     session = "func01"
@@ -434,16 +435,16 @@ def main():
     for subject_id in subject_ids:
         if run_all_sessions:
             all_sessions = [
-                # 'func01',
-                # 'func02',
-                # 'func03', 
-                # 'func04', 
-                # 'func05', 
-                # 'func06', 
-                # 'func07', 
+                'func01',
+                'func02',
+                'func03', 
+                'func04', 
+                'func05', 
+                'func06', 
+                'func07', 
                 'func08', 
-                # 'func09', 
-                # 'func10'
+                'func09', 
+                'func10'
                 ]
             for session in all_sessions:
                 base_url = f"/mfs/io/groups/dmello/projects/cerebellum_reliability/derivatives/fmriprep/ds000224/sub-{subject_id}/ses-{session}/func"
