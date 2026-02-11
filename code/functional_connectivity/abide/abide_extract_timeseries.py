@@ -89,6 +89,7 @@ def get_masker(atlas, atlas_name, use_memory_cache=True):
         standardize="zscore_sample",
         standardize_confounds="zscore_sample",
         memory=memory_param,
+        detrend=True,
         n_jobs=2,
     )
     
@@ -96,7 +97,7 @@ def get_masker(atlas, atlas_name, use_memory_cache=True):
         masker = MultiNiftiLabelsMasker(
         labels_img = atlas['img_path'],
         resampling_target="data",
-        detrend=True
+        detrend=True,
         standardize="zscore_sample",
         standardize_confounds="zscore_sample",
         memory=memory_param,
@@ -163,6 +164,24 @@ def get_masker(atlas, atlas_name, use_memory_cache=True):
 def construct_url(base_url, file_id):
     return f"{base_url}/{file_id}_func_preproc.nii.gz"
 
+# get confounds for image
+def get_confounds(base_url, file_id, subject_id, session, strategy=["high_pass", "motion", "wm_csf"], motion="basic", wm_csf="basic", confounds_raw_suffix = '_desc-confounds_timeseries.tsv'):
+
+    confounds_path = f"{base_url}/sub-{subject_id}_ses-{session}_task-{file_id}{confounds_raw_suffix}"
+
+    selected_cols = ['cosine00', 'cosine01', 'cosine02', 'cosine03', 'csf', 'rot_x', 'rot_y',
+    'rot_z', 'trans_x', 'trans_y', 'trans_z', 'white_matter']
+    confounds = pd.read_csv(
+                    confounds_path,
+                    sep='\t', 
+                    on_bad_lines='skip',
+                    encoding='latin-1',
+                    engine='python',
+                    header=0
+                    )
+
+    return confounds[selected_cols]
+
 def get_phenotypes(base_url, phenotype_file):
 
     # load phenotype file
@@ -201,10 +220,11 @@ def get_pooled(base_url, abide_ids, phenotype, masker, num_subjects=30):
         abide_ids[:num_subjects],
         phenotype[:num_subjects],
     ):
-        time_series = masker.transform(construct_url(base_url, func_file))
+        time_series = masker.fit_transform(construct_url(base_url, func_file))
         pooled_subjects.append(time_series)
     
     return pooled_subjects
+
 
 def save_data(pooled_subjects, atlas_name, num_subjects, abide_ids, output_dir='output/roi_time_series'):
 
@@ -238,7 +258,7 @@ def save_data(pooled_subjects, atlas_name, num_subjects, abide_ids, output_dir='
 
 
 # extract whole brain time series using the HarvardOxford atlas
-def extract_whole_time_series(base_url, phenotype_file, atlas_name='HarvardOxford', atlas_dir='atlases', num_subjects=30):
+def extract_whole_time_series(base_url, phenotype_file, atlas_name='glasser360', atlas_dir='atlases', num_subjects=30):
     # fetch the atlas
     atlas = fetch_atlas(atlas_name, atlas_dir=atlas_dir)
 
@@ -246,7 +266,7 @@ def extract_whole_time_series(base_url, phenotype_file, atlas_name='HarvardOxfor
     abide_ids, phenotype = get_phenotypes(base_url, phenotype_file)
 
     # create masker based on the atlas type
-    masker = get_masker(atlas, mask_type='whole')  
+    masker = get_masker(atlas, atlas_name)  
 
     # get pooled subjects time series
     pooled_subjects = get_pooled(base_url, abide_ids, phenotype, masker, num_subjects)
@@ -255,7 +275,7 @@ def extract_whole_time_series(base_url, phenotype_file, atlas_name='HarvardOxfor
     save_data(pooled_subjects, atlas_name, num_subjects, abide_ids, 'output/roi_time_series')
 
 # extract cortical time series using the MSDL atlas
-def extract_cort_time_series(base_url, phenotype_file, atlas_name='MSDL', num_subjects=30):
+def extract_cort_time_series(base_url, phenotype_file, atlas_name='glasser360', num_subjects=30):
 
     # fetch the atlas
     atlas = fetch_atlas(atlas_name)
@@ -264,7 +284,7 @@ def extract_cort_time_series(base_url, phenotype_file, atlas_name='MSDL', num_su
     abide_ids, phenotype = get_phenotypes(base_url, phenotype_file)
 
     # create masker based on the atlas type
-    masker = get_masker(atlas, mask_type='cort')  
+    masker = get_masker(atlas, atlas_name)  
 
     # get pooled subjects time series
     pooled_subjects = get_pooled(base_url, abide_ids, phenotype, masker, num_subjects)
@@ -278,11 +298,11 @@ def main():
     working_dir = '/mfs/io/groups/dmello/projects/dynamric/fmri_connectivity_trees'
 
     # CHANGE PATHS HERE
-    abide_url = "/mfs/io/groups/dmello/projects/dynamric/tree_mri/datasets/abide/preprocessed_dataset/Outputs/dparsf/filt_noglobal/func_preproc"
+    abide_url = "/mfs/io/groups/dmello/projects/dynamric/fmri_connectivity_trees/datasets/abide/Outputs/dparsf/filt_noglobal/func_preproc"
     phenotype_file = f"{working_dir}/datasets/abide/phenotypic/Phenotypic_V1_0b_preprocessed1.csv"
 
     # SET THE NUMBER OF SUBJECTS, MAX IS 884
-    num_subjects = 884  # You can change this to any number up to 884
+    num_subjects = 100  # You can change this to any number up to 884
     extract_cort_time_series(abide_url, phenotype_file, num_subjects=num_subjects)
     #extract_whole_time_series(abide_url, phenotype_file, num_subjects=num_subjects)
 
