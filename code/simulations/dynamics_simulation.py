@@ -220,7 +220,8 @@ def build_connectivity(N, mode, rng, extra_edges=0, branching=3, density=0.5):
     raise ValueError(f"Unknown connectivity mode: {mode}")
 
 
-def build_symmetric_coupling_types(weights, mode, rng, uniform_type=None):
+def build_symmetric_coupling_types(weights, mode, rng, uniform_type=None,
+                                   allowed_types=None):
     """Assign coupling types symmetrically for symmetric weight matrices.
 
     For each upper-triangle edge, assigns one type and mirrors it.
@@ -231,11 +232,15 @@ def build_symmetric_coupling_types(weights, mode, rng, uniform_type=None):
     mode : str — 'random' or 'uniform'
     rng : numpy.random.Generator
     uniform_type : int or None
+    allowed_types : list of int or None
+        Restrict random sampling to this subset of type codes.
+        None means all five types are eligible (default).
 
     Returns
     -------
     coupling_types : ndarray (N, N), dtype int
     """
+    type_pool = list(allowed_types) if allowed_types is not None else list(TYPE_NAMES.keys())
     N = weights.shape[0]
     coupling_types = np.zeros((N, N), dtype=int)
 
@@ -243,7 +248,7 @@ def build_symmetric_coupling_types(weights, mode, rng, uniform_type=None):
         for j in range(i + 1, N):
             if weights[i, j] != 0:
                 if mode == "random":
-                    ct = int(rng.integers(1, len(TYPE_NAMES) + 1))
+                    ct = int(rng.choice(type_pool))
                 elif mode == "uniform":
                     if uniform_type is None:
                         raise ValueError("uniform_type must be specified for mode='uniform'")
@@ -428,7 +433,7 @@ def compute_typed_coupling(history, step, idelays, weights, coupling_types, G):
     return coupling
 
 
-def build_coupling_types(weights, mode, rng, uniform_type=None):
+def build_coupling_types(weights, mode, rng, uniform_type=None, allowed_types=None):
     """Assign coupling types to nonzero edges.
 
     Parameters
@@ -436,24 +441,28 @@ def build_coupling_types(weights, mode, rng, uniform_type=None):
     weights : ndarray (N, N)
         Connectivity weight matrix.
     mode : str
-        'random' — each nonzero edge gets a random type (1-4).
-        'uniform' — all nonzero edges get the same type.
+        'random' — each nonzero edge gets a random type drawn from allowed_types.
+        'uniform' — all nonzero edges get the same type (uniform_type).
     rng : numpy.random.Generator
         Random number generator.
     uniform_type : int or None
         Required if mode == 'uniform'. The coupling type to use.
+    allowed_types : list of int or None
+        Restrict random sampling to this subset of type codes.
+        None means all five types are eligible (default).
 
     Returns
     -------
     coupling_types : ndarray (N, N), dtype int
     """
+    type_pool = list(allowed_types) if allowed_types is not None else list(TYPE_NAMES.keys())
     N = weights.shape[0]
     coupling_types = np.zeros((N, N), dtype=int)
     nonzero = weights != 0
 
     if mode == "random":
         n_edges = int(nonzero.sum())
-        coupling_types[nonzero] = rng.integers(1, len(TYPE_NAMES) + 1, size=n_edges)
+        coupling_types[nonzero] = rng.choice(type_pool, size=n_edges)
     elif mode == "uniform":
         if uniform_type is None:
             raise ValueError("uniform_type must be specified for mode='uniform'")
@@ -717,6 +726,11 @@ def main():
                         help="How to assign coupling types to edges (default: random)")
     parser.add_argument("--coupling-type", choices=list(NAME_TO_TYPE.keys()), default=None,
                         help="Coupling type for uniform mode (required if --edge-mode uniform)")
+    parser.add_argument("--coupling-types", nargs="+", choices=list(NAME_TO_TYPE.keys()),
+                        default=None,
+                        help="Restrict random coupling assignment to this subset of types "
+                             "(e.g. --coupling-types linear quadrature squared). "
+                             "Only used with --edge-mode random; default is all 5 types.")
     parser.add_argument("--connectivity",
                         choices=["erdos_renyi", "dense", "sparse", "tree", "hierarchical"],
                         default="erdos_renyi",
@@ -766,11 +780,16 @@ def main():
         np.fill_diagonal(tract_lengths, 0.0)
 
     # --- Coupling types ---
-    uniform_type = NAME_TO_TYPE.get(args.coupling_type) if args.coupling_type else None
+    uniform_type  = NAME_TO_TYPE.get(args.coupling_type)  if args.coupling_type  else None
+    allowed_types = [NAME_TO_TYPE[t] for t in args.coupling_types] if args.coupling_types else None
     if args.connectivity in ("erdos_renyi", "sparse", "tree", "hierarchical"):
-        coupling_types = build_symmetric_coupling_types(C, args.edge_mode, rng, uniform_type=uniform_type)
+        coupling_types = build_symmetric_coupling_types(C, args.edge_mode, rng,
+                                                        uniform_type=uniform_type,
+                                                        allowed_types=allowed_types)
     else:
-        coupling_types = build_coupling_types(C, args.edge_mode, rng, uniform_type=uniform_type)
+        coupling_types = build_coupling_types(C, args.edge_mode, rng,
+                                              uniform_type=uniform_type,
+                                              allowed_types=allowed_types)
 
     # Print coupling type distribution
     nonzero_types = coupling_types[coupling_types > 0]
