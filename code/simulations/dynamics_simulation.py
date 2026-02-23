@@ -55,7 +55,7 @@ NAME_TO_TYPE = {v: k for k, v in TYPE_NAMES.items()}
 # Connectivity generation
 # ---------------------------------------------------------------------------
 
-def build_connectivity(N, mode, rng, extra_edges=0):
+def build_connectivity(N, mode, rng, extra_edges=0, branching=3, density=0.5):
     """Generate a connectivity weight matrix.
 
     Parameters
@@ -63,16 +63,28 @@ def build_connectivity(N, mode, rng, extra_edges=0):
     N : int
         Number of nodes.
     mode : str
-        'dense'  — rng.integers(0, 4), asymmetric, ~75% fill (legacy behavior).
-        'sparse' — Erdos-Renyi symmetric graph with ~2N edges, weights in [0.5, 3.0].
-        'tree'   — Random spanning tree (N-1 edges) + optional extra edges.
+        'erdos_renyi'  — G(N, p) with p = density.  Each upper-triangle pair is
+                         independently included with probability `density`, giving a
+                         continuous sparsity scale.  Connectivity is guaranteed by
+                         bridging isolated components.  Symmetric, weights in [0.5, 3.0].
+        'dense'        — Legacy: rng.integers(0, 4), asymmetric, ~75% fill.
+        'sparse'       — Legacy: Erdos-Renyi with fixed p = min(4/(N-1), 0.8) ~ avg degree 4.
+        'tree'         — Uniformly random labeled tree via Prüfer sequence (NetworkX).
+        'hierarchical' — BFS-style random branching tree; each internal node gets
+                         1..branching children, producing explicit multi-level hierarchy.
     rng : numpy.random.Generator
     extra_edges : int
-        Additional non-tree edges (only used with 'tree' mode).
+        Additional non-tree edges appended after tree/hierarchical construction.
+    branching : int
+        Maximum children per node in 'hierarchical' mode (default 3).
+    density : float
+        Edge probability for 'erdos_renyi' mode (0 < density ≤ 1, default 0.5).
+        Expected fraction of all possible edges that will be present.
 
     Returns
     -------
-    C : ndarray (N, N), symmetric for sparse/tree, asymmetric for dense.
+    C : ndarray (N, N), symmetric for erdos_renyi/sparse/tree/hierarchical,
+        asymmetric for dense.
     """
     if mode == "dense":
         C = rng.integers(0, 4, size=(N, N)).astype(float)
@@ -80,17 +92,54 @@ def build_connectivity(N, mode, rng, extra_edges=0):
         return C
 
     if mode == "tree":
+        # Prüfer-sequence random tree: uniform distribution over all N^(N-2) labeled
+        # trees, producing natural hub-and-spoke branching rather than a path graph.
         C = np.zeros((N, N))
-        # Random spanning tree via random permutation path
-        nodes = rng.permutation(N)
-        for k in range(N - 1):
-            i, j = int(nodes[k]), int(nodes[k + 1])
+        seed_int = int(rng.integers(0, 2**31))
+        T = nx.random_labeled_tree(N, seed=seed_int)
+        for i, j in T.edges():
             w = rng.uniform(0.5, 3.0)
             C[i, j] = C[j, i] = w
         # Add extra non-tree edges
         added = 0
         attempts = 0
-        max_attempts = extra_edges * 100
+        max_attempts = max(extra_edges * 100, 1)
+        while added < extra_edges and attempts < max_attempts:
+            i, j = int(rng.integers(0, N)), int(rng.integers(0, N))
+            if i != j and C[i, j] == 0:
+                w = rng.uniform(0.5, 3.0)
+                C[i, j] = C[j, i] = w
+                added += 1
+            attempts += 1
+        if added < extra_edges:
+            print(f"Warning: only added {added}/{extra_edges} extra edges (graph may be near-complete)")
+        return C
+
+    if mode == "hierarchical":
+        # BFS construction: pick a random root, then at each level assign 1..branching
+        # children per parent.  The BFS queue never empties before all nodes are placed
+        # (each parent adds ≥1 child while unassigned nodes remain), guaranteeing a
+        # connected tree with explicit depth structure.
+        from collections import deque
+        C = np.zeros((N, N))
+        if N <= 1:
+            return C
+        nodes = list(rng.permutation(N))
+        queue = deque([nodes[0]])
+        pos = 1
+        while pos < N and queue:
+            parent = queue.popleft()
+            n_children = min(int(rng.integers(1, branching + 1)), N - pos)
+            for _ in range(n_children):
+                child = nodes[pos]
+                pos += 1
+                w = rng.uniform(0.5, 3.0)
+                C[parent, child] = C[child, parent] = w
+                queue.append(child)
+        # Add extra non-tree edges
+        added = 0
+        attempts = 0
+        max_attempts = max(extra_edges * 100, 1)
         while added < extra_edges and attempts < max_attempts:
             i, j = int(rng.integers(0, N)), int(rng.integers(0, N))
             if i != j and C[i, j] == 0:
@@ -126,6 +175,38 @@ def build_connectivity(N, mode, rng, extra_edges=0):
                 w = rng.uniform(0.5, 3.0)
                 C[a, b] = C[b, a] = w
             # Recompute components
+            G = nx.Graph()
+            G.add_nodes_from(range(N))
+            for i in range(N):
+                for j in range(i + 1, N):
+                    if C[i, j] > 0:
+                        G.add_edge(i, j)
+            components = list(nx.connected_components(G))
+        return C
+
+    if mode == "erdos_renyi":
+        if not (0 < density <= 1):
+            raise ValueError(f"density must be in (0, 1], got {density}")
+        C = np.zeros((N, N))
+        for i in range(N):
+            for j in range(i + 1, N):
+                if rng.random() < density:
+                    w = rng.uniform(0.5, 3.0)
+                    C[i, j] = C[j, i] = w
+        # Ensure connected by bridging isolated components
+        G = nx.Graph()
+        G.add_nodes_from(range(N))
+        for i in range(N):
+            for j in range(i + 1, N):
+                if C[i, j] > 0:
+                    G.add_edge(i, j)
+        components = list(nx.connected_components(G))
+        while len(components) > 1:
+            for ci in range(len(components) - 1):
+                a = min(components[ci])
+                b = min(components[ci + 1])
+                w = rng.uniform(0.5, 3.0)
+                C[a, b] = C[b, a] = w
             G = nx.Graph()
             G.add_nodes_from(range(N))
             for i in range(N):
@@ -535,10 +616,18 @@ def main():
                         help="How to assign coupling types to edges (default: random)")
     parser.add_argument("--coupling-type", choices=list(NAME_TO_TYPE.keys()), default=None,
                         help="Coupling type for uniform mode (required if --edge-mode uniform)")
-    parser.add_argument("--connectivity", choices=["dense", "sparse", "tree"], default="dense",
-                        help="Connectivity generation mode (default: dense)")
+    parser.add_argument("--connectivity",
+                        choices=["erdos_renyi", "dense", "sparse", "tree", "hierarchical"],
+                        default="erdos_renyi",
+                        help="Connectivity generation mode (default: erdos_renyi)")
+    parser.add_argument("--density", type=float, default=0.5,
+                        help="Edge probability for --connectivity erdos_renyi "
+                             "(0 < density ≤ 1, default: 0.5). "
+                             "density≈0.1 is sparse, density≈0.9 is near-complete.")
     parser.add_argument("--extra-edges", type=int, default=0,
-                        help="Extra non-tree edges (only used with --connectivity tree, default: 0)")
+                        help="Extra non-tree edges appended after tree/hierarchical construction (default: 0)")
+    parser.add_argument("--branching", type=int, default=3,
+                        help="Max children per node for --connectivity hierarchical (default: 3)")
     parser.add_argument("--no-delays", action="store_true",
                         help="Disable conduction delays (no tract lengths, instantaneous coupling)")
     parser.add_argument("--outdir", default="output/dynamics_sim",
@@ -556,11 +645,15 @@ def main():
     N = args.N
 
     # --- Connectivity ---
-    C = build_connectivity(N, args.connectivity, rng, extra_edges=args.extra_edges)
+    C = build_connectivity(N, args.connectivity, rng,
+                           extra_edges=args.extra_edges, branching=args.branching,
+                           density=args.density)
     n_edges = np.count_nonzero(np.triu(C, k=1))
+    max_edges = N * (N - 1) // 2
+    achieved_density = n_edges / max_edges
     is_symmetric = np.allclose(C, C.T)
-    print(f"Connectivity mode: {args.connectivity} — {n_edges} undirected edges, "
-          f"symmetric={is_symmetric}")
+    print(f"Connectivity mode: {args.connectivity} — {n_edges}/{max_edges} edges, "
+          f"density={achieved_density:.3f}, symmetric={is_symmetric}")
 
     tract_lengths = None
     if not args.no_delays:
@@ -570,7 +663,7 @@ def main():
 
     # --- Coupling types ---
     uniform_type = NAME_TO_TYPE.get(args.coupling_type) if args.coupling_type else None
-    if args.connectivity in ("sparse", "tree"):
+    if args.connectivity in ("erdos_renyi", "sparse", "tree", "hierarchical"):
         coupling_types = build_symmetric_coupling_types(C, args.edge_mode, rng, uniform_type=uniform_type)
     else:
         coupling_types = build_coupling_types(C, args.edge_mode, rng, uniform_type=uniform_type)
