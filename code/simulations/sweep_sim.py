@@ -2,10 +2,10 @@
 sweep_sim.py — Sweep over N values, run multiple trials per N, collect and average metrics.
 
 Usage:
-    python code/simulations/sweep_sim.py \
+    python sweep_sim.py \
         --N-values 5 10 15 20 25 --trials 10 --simlen 600000 \
-        --connectivity tree --edge-mode random --no-delays \
-        --outdir output/sweep --seed 42
+        --connectivity dense --edge-mode random --no-delays \
+        --outdir output/sweep_dense --seed 42
 
     # Quick test
     python code/simulations/sweep_sim.py \
@@ -80,7 +80,10 @@ def run_single_trial(N, trial_idx, args, trial_dir):
         np.random.seed(seed)
 
     # --- Connectivity ---
-    C = build_connectivity(N, args.connectivity, rng, extra_edges=args.extra_edges)
+    C = build_connectivity(N, args.connectivity, rng,
+                           extra_edges=args.extra_edges,
+                           branching=args.branching,
+                           density=args.density)
 
     tract_lengths = None
     if not args.no_delays:
@@ -90,7 +93,7 @@ def run_single_trial(N, trial_idx, args, trial_dir):
 
     # --- Coupling types ---
     uniform_type = NAME_TO_TYPE.get(args.coupling_type) if args.coupling_type else None
-    if args.connectivity in ("sparse", "tree"):
+    if args.connectivity in ("erdos_renyi", "sparse", "tree", "hierarchical"):
         coupling_types = build_symmetric_coupling_types(
             C, args.edge_mode, rng, uniform_type=uniform_type
         )
@@ -109,6 +112,7 @@ def run_single_trial(N, trial_idx, args, trial_dir):
         tract_lengths=tract_lengths,
         params=params,
         conduction_speed=3.0, dt=0.5, simlen=args.simlen,
+        device=args.device,
     )
 
     # --- Save simulation ---
@@ -238,16 +242,23 @@ def main():
                         help="Number of trials per N (default: 10)")
     parser.add_argument("--simlen", type=float, default=600000,
                         help="Simulation length in ms (default: 600000)")
-    parser.add_argument("--connectivity", choices=["dense", "sparse", "tree"],
-                        default="tree", help="Connectivity mode (default: tree)")
+    parser.add_argument("--connectivity",
+                        choices=["erdos_renyi", "dense", "sparse", "tree", "hierarchical"],
+                        default="erdos_renyi", help="Connectivity mode (default: erdos_renyi)")
+    parser.add_argument("--density", type=float, default=0.5,
+                        help="Edge probability for erdos_renyi mode (0 < density ≤ 1, default: 0.5)")
+    parser.add_argument("--branching", type=int, default=3,
+                        help="Max children per node for hierarchical mode (default: 3)")
     parser.add_argument("--edge-mode", choices=["random", "uniform"], default="random",
                         help="Coupling type assignment mode (default: random)")
     parser.add_argument("--coupling-type", choices=list(NAME_TO_TYPE.keys()), default=None,
                         help="Coupling type for uniform edge-mode")
     parser.add_argument("--extra-edges", type=int, default=0,
-                        help="Extra edges for tree mode (default: 0)")
+                        help="Extra edges for tree/hierarchical mode (default: 0)")
     parser.add_argument("--no-delays", action="store_true",
                         help="Disable conduction delays")
+    parser.add_argument("--device", default=None,
+                        help="PyTorch device: 'cpu', 'cuda', 'mps', or omit to auto-select")
     parser.add_argument("--G", type=float, default=0.3,
                         help="Global coupling strength (default: 0.3)")
     parser.add_argument("--D", type=float, default=2e-4,
@@ -303,10 +314,13 @@ def main():
         "trials": n_trials,
         "simlen": args.simlen,
         "connectivity": args.connectivity,
+        "density": args.density,
+        "branching": args.branching,
         "edge_mode": args.edge_mode,
         "coupling_type": args.coupling_type,
         "extra_edges": args.extra_edges,
         "no_delays": args.no_delays,
+        "device": args.device,
         "G": args.G,
         "D": args.D,
         "num_bins": args.num_bins,
