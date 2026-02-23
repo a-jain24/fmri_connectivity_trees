@@ -92,14 +92,15 @@ def run_single_trial(N, trial_idx, args, trial_dir):
         np.fill_diagonal(tract_lengths, 0.0)
 
     # --- Coupling types ---
-    uniform_type = NAME_TO_TYPE.get(args.coupling_type) if args.coupling_type else None
+    uniform_type  = NAME_TO_TYPE.get(args.coupling_type)  if args.coupling_type  else None
+    allowed_types = [NAME_TO_TYPE[t] for t in args.coupling_types] if args.coupling_types else None
     if args.connectivity in ("erdos_renyi", "sparse", "tree", "hierarchical"):
         coupling_types = build_symmetric_coupling_types(
-            C, args.edge_mode, rng, uniform_type=uniform_type
+            C, args.edge_mode, rng, uniform_type=uniform_type, allowed_types=allowed_types
         )
     else:
         coupling_types = build_coupling_types(
-            C, args.edge_mode, rng, uniform_type=uniform_type
+            C, args.edge_mode, rng, uniform_type=uniform_type, allowed_types=allowed_types
         )
 
     # --- Heterogeneous params ---
@@ -253,6 +254,10 @@ def main():
                         help="Coupling type assignment mode (default: random)")
     parser.add_argument("--coupling-type", choices=list(NAME_TO_TYPE.keys()), default=None,
                         help="Coupling type for uniform edge-mode")
+    parser.add_argument("--coupling-types", nargs="+", choices=list(NAME_TO_TYPE.keys()),
+                        default=None,
+                        help="Restrict random coupling to this subset of types "
+                             "(e.g. --coupling-types linear quadrature squared)")
     parser.add_argument("--extra-edges", type=int, default=0,
                         help="Extra edges for tree/hierarchical mode (default: 0)")
     parser.add_argument("--no-delays", action="store_true",
@@ -318,6 +323,7 @@ def main():
         "branching": args.branching,
         "edge_mode": args.edge_mode,
         "coupling_type": args.coupling_type,
+        "coupling_types_subset": args.coupling_types,
         "extra_edges": args.extra_edges,
         "no_delays": args.no_delays,
         "device": args.device,
