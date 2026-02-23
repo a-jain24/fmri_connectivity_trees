@@ -29,6 +29,7 @@ import os
 
 import networkx as nx
 import numpy as np
+import torch
 from tqdm import tqdm
 
 # ---------------------------------------------------------------------------
@@ -467,14 +468,102 @@ def build_coupling_types(weights, mode, rng, uniform_type=None):
 
 
 # ---------------------------------------------------------------------------
+# Torch-accelerated helpers  (called exclusively from run_sim)
+# ---------------------------------------------------------------------------
+
+def _select_device(requested):
+    """Return the best available torch.device.
+
+    Priority: explicit request > CUDA > MPS (Apple Silicon) > CPU.
+    MPS defaults to float32 because float64 support is incomplete on older
+    PyTorch builds; CUDA and CPU use float64 for numerical fidelity.
+    """
+    if requested is not None:
+        return torch.device(requested)
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+
+def _coupling_transform_torch(V, W, ct):
+    """Per-edge coupling transform — GPU-friendly via torch.where.
+
+    All five transforms are evaluated elementwise everywhere; torch.where then
+    selects the correct one per edge.  This avoids masked scatter-assigns which
+    are slow on CUDA.  Because coupling types are mutually exclusive the five
+    terms sum to the correct result.
+    """
+    zeros = torch.zeros_like(V)
+    return (
+        torch.where(ct == LINEAR,     V,                       zeros)
+      + torch.where(ct == QUADRATURE, W,                       zeros)
+      + torch.where(ct == RECTIFIED,  torch.clamp(V, min=0.0), zeros)
+      + torch.where(ct == SQUARED,    V.pow(2),                 zeros)
+      + torch.where(ct == PAC,        (0.5 + 0.4 * V) * W,     zeros)
+    )
+
+
+def _rhs_torch(state, params, coupling_input):
+    """Generic2dOscillator RHS — operates on torch tensors."""
+    V = state[:, 0]
+    W = state[:, 1]
+    dV = params["d"] * params["tau"] * (
+        -params["f"] * V.pow(3)
+        + params["e"] * V.pow(2)
+        + params["g"] * V
+        + params["alpha"] * W
+        + params["gamma"] * coupling_input
+    )
+    dW = (params["d"] / params["tau"]) * (
+        params["c"] * V.pow(2)
+        + params["b"] * V
+        - params["beta"] * W
+        + params["a"]
+    )
+    return torch.stack([dV, dW], dim=1)
+
+
+def _compute_coupling_torch(history, step, idelays_t, j_range,
+                             weights_t, ct_t, G, horizon):
+    """Vectorised delayed-coupling gather — replaces the O(N²) Python loop.
+
+    Uses advanced indexing to collect delayed V and W for every (target i,
+    source j) pair in a single operation, keeping all data on the accelerator.
+
+    Parameters
+    ----------
+    history   : Tensor (horizon, N, 2)
+    step      : int
+    idelays_t : LongTensor (N, N)
+    j_range   : LongTensor (N, N)  — precomputed [[0,1,...,N-1], ...]
+    weights_t : Tensor (N, N)
+    ct_t      : LongTensor (N, N)
+    G         : scalar Tensor
+    horizon   : int
+    """
+    idx   = (step - idelays_t) % horizon   # (N, N) time index per edge
+    V_del = history[idx, j_range, 0]       # (N, N) delayed V of source j
+    W_del = history[idx, j_range, 1]       # (N, N) delayed W of source j
+    transformed = _coupling_transform_torch(V_del, W_del, ct_t)
+    transformed = transformed * (ct_t != 0).to(transformed.dtype)  # mask disconnected
+    return G * (weights_t * transformed).sum(dim=1)                 # (N,)
+
+
+# ---------------------------------------------------------------------------
 # Simulation
 # ---------------------------------------------------------------------------
 
 def run_sim(conn, G, D, coupling_types, tract_lengths=None, params=None,
-            conduction_speed=3.0, dt=0.5, simlen=1000):
+            conduction_speed=3.0, dt=0.5, simlen=1000, device=None):
     """
     Simulate Generic2dOscillator network with edge-specific coupling types,
     Heun stochastic integration, and temporal-average monitoring.
+
+    All inner-loop computation runs on a PyTorch device (CUDA, MPS, or CPU),
+    eliminating the O(N²) Python coupling loop and keeping arrays on the
+    accelerator throughout.  Inputs and outputs remain plain numpy arrays.
 
     Parameters
     ----------
@@ -485,17 +574,21 @@ def run_sim(conn, G, D, coupling_types, tract_lengths=None, params=None,
     D : float
         Noise amplitude.
     coupling_types : ndarray, shape (N, N), dtype int
-        Per-edge coupling type (0=none, 1=linear, 2=quadrature, 3=rectified, 4=squared, 5=pac).
+        Per-edge coupling type (0=none, 1=linear, 2=quadrature, 3=rectified,
+        4=squared, 5=pac).
     tract_lengths : ndarray, shape (N, N), or None
         Fiber tract lengths in mm. If None, all delays are 1 step (instantaneous).
     params : dict of ndarrays or None
         Per-node model parameters. If None, uses homogeneous TVB defaults.
     conduction_speed : float
-        Signal propagation speed in mm/ms (only used when tract_lengths is provided).
+        Signal propagation speed in mm/ms (only used when tract_lengths provided).
     dt : float
         Integration time step in ms.
     simlen : float
         Total simulation length in ms.
+    device : str or None
+        PyTorch device string ('cpu', 'cuda', 'cuda:1', 'mps') or None to
+        auto-select: CUDA → MPS → CPU.
 
     Returns
     -------
@@ -504,13 +597,19 @@ def run_sim(conn, G, D, coupling_types, tract_lengths=None, params=None,
     V_avg : ndarray, shape (n_monitor_steps, N)
         Temporally averaged V for each node.
     """
+    # --- Device / dtype setup ---
+    dev = _select_device(device)
+    # MPS has incomplete float64 support on older PyTorch builds; use float32
+    fdtype = torch.float32 if dev.type == "mps" else torch.float64
+    print(f"[run_sim] device={dev}, dtype={fdtype}")
+
     N = conn.shape[0]
     n_steps = int(simlen / dt)
 
     if params is None:
         params = tvb_default_params(N)
 
-    # Convert tract lengths to delays in integration steps
+    # --- Delays (computed in numpy, then moved to device) ---
     if tract_lengths is not None:
         delays_ms = tract_lengths / conduction_speed
         idelays = np.round(delays_ms / dt).astype(int)
@@ -523,58 +622,60 @@ def run_sim(conn, G, D, coupling_types, tract_lengths=None, params=None,
         np.fill_diagonal(idelays, 0)
         print("No tract lengths — using 1-step delays (instantaneous coupling)")
 
-    # Circular history buffer sized to max delay + 1, storing both V and W
     horizon = int(idelays.max()) + 1
 
-    # Initialize history buffer with small random state (V, W)
-    history = np.random.normal(0.0, 0.1, (horizon, N, 2))
+    # --- Move everything to device as tensors ---
+    params_t    = {k: torch.tensor(v, dtype=fdtype, device=dev)
+                   for k, v in params.items()}
+    weights_t   = torch.tensor(conn,           dtype=fdtype,      device=dev)
+    ct_t        = torch.tensor(coupling_types, dtype=torch.long,  device=dev)
+    idelays_t   = torch.tensor(idelays,        dtype=torch.long,  device=dev)
+    G_t         = torch.tensor(G,              dtype=fdtype,      device=dev)
 
-    # Current state
-    curr_state = np.random.normal(0.0, 0.1, (N, 2))
-    history[:] = curr_state[np.newaxis, :, :]
+    # Precompute column-index tensor for the delayed gather: j_range[i, j] = j
+    j_range = torch.arange(N, device=dev).unsqueeze(0).expand(N, N)
 
-    # TemporalAverage monitor (period=5.0 ms)
+    # --- Circular history buffer (horizon, N, 2) on device ---
+    init = torch.randn(N, 2, dtype=fdtype, device=dev) * 0.1
+    history    = init.unsqueeze(0).expand(horizon, -1, -1).clone()
+    curr_state = init.clone()
+
+    # --- TemporalAverage monitor (period = 5.0 ms) ---
     monitor_period = 5.0
     skip_step = int(monitor_period / dt)
-    buffer_V = np.zeros((skip_step, N))
+    buffer_V  = torch.zeros(skip_step, N, dtype=fdtype, device=dev)
 
-    out_t = []
-    out_V = []
+    sqrt_dt = dt ** 0.5
+    out_t, out_V = [], []
 
     for k in tqdm(range(n_steps), desc="Simulating", miniters=n_steps // 100):
-        # Store current state into the circular history buffer
         history[k % horizon] = curr_state
 
-        # Compute delayed coupling from history with edge-specific transforms
-        coupling_input = compute_typed_coupling(
-            history, k, idelays, conn, coupling_types, G
+        coupling_input = _compute_coupling_torch(
+            history, k, idelays_t, j_range, weights_t, ct_t, G_t, horizon
         )
 
-        # Heun stochastic integration step
-        noise = D * np.sqrt(dt) * np.random.randn(N, 2)
+        # Heun stochastic step — same noise realisation for predictor & corrector
+        noise = D * sqrt_dt * torch.randn(N, 2, dtype=fdtype, device=dev)
 
-        k1 = rhs_generic_2d(curr_state, params, coupling_input)
+        k1          = _rhs_torch(curr_state, params_t, coupling_input)
         inter_state = curr_state + dt * k1 + noise
 
-        # Recompute coupling at predicted state
         history[k % horizon] = inter_state
-        coupling_pred = compute_typed_coupling(
-            history, k, idelays, conn, coupling_types, G
+        coupling_pred = _compute_coupling_torch(
+            history, k, idelays_t, j_range, weights_t, ct_t, G_t, horizon
         )
 
-        k2 = rhs_generic_2d(inter_state, params, coupling_pred)
+        k2         = _rhs_torch(inter_state, params_t, coupling_pred)
         curr_state = curr_state + 0.5 * dt * (k1 + k2) + noise
-
-        # Restore actual state into history
         history[k % horizon] = curr_state
 
-        # TemporalAverage monitor logic
-        idx = k % skip_step
-        buffer_V[idx] = curr_state[:, 0]
-
-        if idx == skip_step - 1:
+        # TemporalAverage monitor
+        buf_idx = k % skip_step
+        buffer_V[buf_idx] = curr_state[:, 0]
+        if buf_idx == skip_step - 1:
             out_t.append(k * dt)
-            out_V.append(buffer_V.mean(axis=0))
+            out_V.append(buffer_V.mean(dim=0).cpu().numpy())
 
     return np.array(out_t), np.array(out_V)
 
@@ -630,6 +731,9 @@ def main():
                         help="Max children per node for --connectivity hierarchical (default: 3)")
     parser.add_argument("--no-delays", action="store_true",
                         help="Disable conduction delays (no tract lengths, instantaneous coupling)")
+    parser.add_argument("--device", default=None,
+                        help="PyTorch device: 'cpu', 'cuda', 'cuda:1', 'mps', or omit "
+                             "to auto-select (CUDA → MPS → CPU)")
     parser.add_argument("--outdir", default="output/dynamics_sim",
                         help="Output directory (default: output/dynamics_sim)")
     parser.add_argument("--seed", type=int, default=None, help="Random seed")
@@ -701,6 +805,7 @@ def main():
         tract_lengths=tract_lengths,
         params=params,
         conduction_speed=conduction_speed, dt=dt, simlen=args.simlen,
+        device=args.device,
     )
 
     # --- Save ---

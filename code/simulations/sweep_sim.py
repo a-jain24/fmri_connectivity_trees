@@ -112,6 +112,7 @@ def run_single_trial(N, trial_idx, args, trial_dir):
         tract_lengths=tract_lengths,
         params=params,
         conduction_speed=3.0, dt=0.5, simlen=args.simlen,
+        device=args.device,
     )
 
     # --- Save simulation ---
@@ -256,6 +257,8 @@ def main():
                         help="Extra edges for tree/hierarchical mode (default: 0)")
     parser.add_argument("--no-delays", action="store_true",
                         help="Disable conduction delays")
+    parser.add_argument("--device", default=None,
+                        help="PyTorch device: 'cpu', 'cuda', 'mps', or omit to auto-select")
     parser.add_argument("--G", type=float, default=0.3,
                         help="Global coupling strength (default: 0.3)")
     parser.add_argument("--D", type=float, default=2e-4,
@@ -317,6 +320,7 @@ def main():
         "coupling_type": args.coupling_type,
         "extra_edges": args.extra_edges,
         "no_delays": args.no_delays,
+        "device": args.device,
         "G": args.G,
         "D": args.D,
         "num_bins": args.num_bins,
