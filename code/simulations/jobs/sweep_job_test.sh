@@ -2,24 +2,22 @@
 #SBATCH --job-name=fmri_sweep_test                        # job name
 #SBATCH --partition=GPU                                   # GPU partition
 #SBATCH --nodes=1                                         # one node per task
-#SBATCH --ntasks=1                                        # one task per node
-#SBATCH --cpus-per-task=4                                 # CPU cores for data loading
 #SBATCH --gres=gpu:1                                      # one GPU per task
-#SBATCH --mem=16G                                         # memory
 #SBATCH --time=0-04:00:00                                 # max walltime (4 hours)
+#SBATCH --ntasks=1                                        # one task per array job
 #SBATCH --array=0-13                                      # 2 connectivity x 7 coupling = 14 jobs
-#SBATCH --output=jobs/logs/sweep_test_%A_%a.out           # stdout per task
-#SBATCH --error=jobs/logs/sweep_test_%A_%a.err            # stderr per task
+#SBATCH --output=cuda.%A_%a.out                           # stdout per array task
 #SBATCH --mail-user=dhvani.jain@utsouthwestern.edu        # email notifications
-#SBATCH --mail-type=END,FAIL                              # notify on end or failure
+#SBATCH --mail-type=ALL                              
 
 # ---------------------------------------------------------------------------
 # Environment
 # ---------------------------------------------------------------------------
 BASE_DIR=/project/greencenter/Lin_lab/s229618/fmri_connectivity_trees
 SCRIPT_DIR=${BASE_DIR}/code/simulations
-OUTPUT_ROOT=${SCRIPT_DIR}/output/sweep_test
+OUTPUT_ROOT=${SCRIPT_DIR}/output/sweep_test_2
 
+eval "$(conda shell.bash hook)"
 conda activate dynamric
 cd "${SCRIPT_DIR}"
 mkdir -p jobs/logs
@@ -86,7 +84,7 @@ echo "========================================================"
 python sweep_sim.py \
     --N-values 5 10 15 20 25 \
     --trials 5 \
-    --simlen 600000 \
+    --simlen 600 \
     --connectivity "${CONNECTIVITY}" \
     ${CONN_EXTRA} \
     ${COUP_EXTRA} \
