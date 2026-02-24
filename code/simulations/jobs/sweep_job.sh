@@ -20,6 +20,7 @@ BASE_DIR=/project/greencenter/Lin_lab/s229618/fmri_connectivity_trees
 SCRIPT_DIR=${BASE_DIR}/code/simulations
 OUTPUT_ROOT=${SCRIPT_DIR}/output/sweep
 
+eval "$(conda shell.bash hook)"
 conda activate dynamric
 cd "${SCRIPT_DIR}"
 mkdir -p jobs/logs
