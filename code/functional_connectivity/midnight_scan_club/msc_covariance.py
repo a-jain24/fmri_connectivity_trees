@@ -211,12 +211,12 @@ def load_data(subjects=['MSC01'], base_dir='/mfs/io/groups/dmello/projects/dynam
 
 def combine_thalamic_nuclei(subjects, tasks, sessions, base_dir, task_dir='all_tasks', num_bins=10):
 
-    thalamus_regions = []
+    thalamus_regions = ['left_global', 'right_global']
 
-    with open(f'{base_dir}/atlases/MorelAtlasMNI152/thalamus_regions', 'r') as f:
-        reader = csv.reader(f, delimiter='\t')
-        for row in reader:
-            thalamus_regions.append(row[0])
+    # with open(f'{base_dir}/atlases/MorelAtlasMNI152/thalamus_regions', 'r') as f:
+    #     reader = csv.reader(f, delimiter='\t')
+    #     for row in reader:
+    #         thalamus_regions.append(row[0])
     
     timeseries_array = []
 
