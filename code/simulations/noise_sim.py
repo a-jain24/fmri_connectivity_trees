@@ -11,14 +11,16 @@ Hypothesis (from notes/noise.md):
   density-matched FC (top N-1 correlation edges), even when intrinsic
   dynamics and noise levels differ.
 
-Output (--outdir):
-  individual_<k>_D<level>.npz   — per-individual simulation + analysis
-  noise_sim_networks.pdf         — GT + CL + FC panels per individual
-  noise_sim_consistency.pdf      — pairwise Jaccard heatmaps + GT recovery bars
+Output layout (determined by --run-id):
+  datasets/synthetic/<run_id>/timeseries/individual_<k>_D<level>.npz   — V + connectivity
+  code/simulations/output/<run_id>/individual_<k>_D<level>_analysis.npz — FC / MI / CL results
+  code/simulations/output/<run_id>/params.json                           — full run parameters
+  code/simulations/figures/<run_id>/noise_sim_networks.pdf               — GT + CL + FC panels
+  code/simulations/figures/<run_id>/noise_sim_consistency.pdf            — Jaccard heatmaps
 
 Usage:
     python code/simulations/noise_sim.py
-    python code/simulations/noise_sim.py --simlen 200000 --seed 42 --outdir output/noise_sim
+    python code/simulations/noise_sim.py --simlen 200000 --seed 42 --run-id my_noise_run
 """
 
 import argparse
@@ -32,6 +34,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from sim_utils import analysis_dir, detect_device, figures_dir, make_run_id, save_params, timeseries_dir
 from dynamics_simulation import (
     LINEAR,
     build_connectivity,
@@ -188,7 +191,7 @@ def draw_network(ax, adj: np.ndarray, pos: dict, title: str,
 # Figures
 # ---------------------------------------------------------------------------
 
-def make_figures(C: np.ndarray, results: list, outdir: str) -> None:
+def make_figures(C: np.ndarray, results: list, fig_dir: str) -> None:
     """Generate both output figures."""
     n = len(results)
     N = C.shape[0]
@@ -242,7 +245,8 @@ def make_figures(C: np.ndarray, results: list, outdir: str) -> None:
                      f"FC  {lbl}\nJ={fc_gt_j[k]:.2f}  r={fc_gt_corr[k]:.2f}",
                      edge_color="#FF9800")
 
-    path1 = os.path.join(outdir, "noise_sim_networks.pdf")
+    os.makedirs(fig_dir, exist_ok=True)
+    path1 = os.path.join(fig_dir, "noise_sim_networks.pdf")
     fig1.savefig(path1, bbox_inches="tight", dpi=150)
     plt.close(fig1)
     print(f"Saved → {path1}")
@@ -313,7 +317,7 @@ def make_figures(C: np.ndarray, results: list, outdir: str) -> None:
     axes[2].legend(fontsize=9)
     axes[2].spines[["top", "right"]].set_visible(False)
 
-    path2 = os.path.join(outdir, "noise_sim_consistency.pdf")
+    path2 = os.path.join(fig_dir, "noise_sim_consistency.pdf")
     fig2.savefig(path2, bbox_inches="tight", dpi=150)
     plt.close(fig2)
     print(f"Saved → {path2}")
@@ -351,7 +355,10 @@ def run_noise_sim(args):
     gt_es = edge_set(C)
     print(f"Ground-truth tree: {len(gt_es)} edges  (expected N−1 = {N_NODES - 1})")
 
-    os.makedirs(args.outdir, exist_ok=True)
+    ts_dir = timeseries_dir(args.run_id)
+    an_dir = analysis_dir(args.run_id)
+    os.makedirs(ts_dir, exist_ok=True)
+    os.makedirs(an_dir, exist_ok=True)
     results = []
 
     # If --shared-params, sample once and reuse for all individuals
@@ -407,20 +414,29 @@ def run_noise_sim(args):
         fc_gt_j = jaccard(fc_es, gt_es)
         print(f"  CL GT-Jaccard = {cl_gt_j:.3f}   FC GT-Jaccard = {fc_gt_j:.3f}")
 
-        # Save per-individual .npz
-        npz_path = os.path.join(args.outdir, f"individual_{idx+1}_D{D:.0e}.npz")
+        tag = f"individual_{idx+1}_D{D:.0e}"
+
+        # Save timeseries to datasets/synthetic/<run_id>/timeseries/
+        ts_path = os.path.join(ts_dir, f"{tag}.npz")
         np.savez_compressed(
-            npz_path,
+            ts_path,
             conn=C,
             coupling_types=coupling_types,
             D=D,
             V=V,
+        )
+        print(f"  Saved timeseries → {ts_path}")
+
+        # Save analysis to code/simulations/output/<run_id>/
+        an_path = os.path.join(an_dir, f"{tag}_analysis.npz")
+        np.savez_compressed(
+            an_path,
             fc_raw=fc_raw,
             fc_density=fc_density,
             mi_raw=mi_raw,
             cl_adj=cl_adj,
         )
-        print(f"  Saved → {npz_path}")
+        print(f"  Saved analysis  → {an_path}")
 
         results.append({
             "D":             D,
@@ -464,24 +480,31 @@ def main():
         help="PyTorch device: cpu / cuda / mps or omit for auto-select",
     )
     parser.add_argument(
-        "--outdir", default=None,
-        help="Output directory (default: noise_sim or noise_sim_shared_params)",
+        "--run-id", default=None,
+        help=(
+            "Identifier for this run, used as the directory name under "
+            "datasets/synthetic/, simulations/output/, and simulations/figures/. "
+            "Auto-generated as YYYYMMDD_HHMMSS_noise_sim[_shared_params] if omitted."
+        ),
     )
     parser.add_argument(
         "--shared-params", action="store_true",
         help="Use the same intrinsic NMM parameters for all individuals (only noise varies)",
     )
     args = parser.parse_args()
-    if args.outdir is None:
-        args.outdir = (
-            "code/simulations/output/noise_sim_shared_params"
-            if args.shared_params
-            else "code/simulations/output/noise_sim"
-        )
+
+    args.device = detect_device(args.device)
+
+    if args.run_id is None:
+        tag = "noise_sim_shared_params" if args.shared_params else "noise_sim"
+        args.run_id = make_run_id(tag)
+    print(f"Run ID: {args.run_id}")
+
+    save_params(args.run_id, "noise_sim.py", vars(args))
 
     C, results = run_noise_sim(args)
     print("\n--- Generating figures ---")
-    make_figures(C, results, args.outdir)
+    make_figures(C, results, figures_dir(args.run_id))
     print("Done.")
 
 
