@@ -1,17 +1,23 @@
 """
 sweep_sim.py — Sweep over N values, run multiple trials per N, collect and average metrics.
 
+Output layout (determined by --run-id):
+    datasets/synthetic/<run_id>/timeseries/N<n>/trial<t>/dynamics_sim.npz
+    code/simulations/output/<run_id>/N<n>/trial<t>/analysis.npz
+    code/simulations/output/<run_id>/sweep_results.npz
+    code/simulations/output/<run_id>/sweep_summary.json
+    code/simulations/output/<run_id>/params.json
+
 Usage:
     python sweep_sim.py \
         --N-values 5 10 15 20 25 --trials 10 --simlen 600000 \
         --connectivity dense --edge-mode random --no-delays \
-        --outdir output/sweep_dense --seed 42
+        --run-id dense_random --seed 42
 
     # Quick test
     python code/simulations/sweep_sim.py \
         --N-values 5 10 --trials 2 --simlen 5000 \
-        --connectivity tree --no-delays --seed 42 \
-        --outdir /tmp/sweep_test
+        --connectivity tree --no-delays --seed 42
 """
 
 import argparse
@@ -21,6 +27,7 @@ import time
 
 import numpy as np
 
+from sim_utils import analysis_dir, detect_device, make_run_id, save_params, timeseries_dir
 from dynamics_simulation import (
     NAME_TO_TYPE,
     build_connectivity,
@@ -72,7 +79,7 @@ _SIGMAS = {
 }
 
 
-def run_single_trial(N, trial_idx, args, trial_dir):
+def run_single_trial(N, trial_idx, args, ts_trial_dir, an_trial_dir):
     """Run one simulation + analysis trial. Returns metrics dict."""
     seed = args.seed + trial_idx if args.seed is not None else None
     rng = np.random.default_rng(seed)
@@ -94,7 +101,7 @@ def run_single_trial(N, trial_idx, args, trial_dir):
     # --- Coupling types ---
     uniform_type  = NAME_TO_TYPE.get(args.coupling_type)  if args.coupling_type  else None
     allowed_types = [NAME_TO_TYPE[t] for t in args.coupling_types] if args.coupling_types else None
-    if args.connectivity in ("erdos_renyi", "sparse", "tree", "hierarchical"):
+    if args.connectivity in ("erdos_renyi", "tree", "hierarchical"):
         coupling_types = build_symmetric_coupling_types(
             C, args.edge_mode, rng, uniform_type=uniform_type, allowed_types=allowed_types
         )
@@ -116,10 +123,10 @@ def run_single_trial(N, trial_idx, args, trial_dir):
         device=args.device,
     )
 
-    # --- Save simulation ---
-    os.makedirs(trial_dir, exist_ok=True)
+    # --- Save timeseries to datasets/synthetic/<run_id>/timeseries/ ---
+    os.makedirs(ts_trial_dir, exist_ok=True)
     save_data(
-        os.path.join(trial_dir, "dynamics_sim.npz"),
+        os.path.join(ts_trial_dir, "dynamics_sim.npz"),
         t, V, C, args.G, args.D, coupling_types,
         tract_lengths=tract_lengths,
         params=params, conduction_speed=3.0, dt=0.5, simlen=args.simlen,
@@ -147,9 +154,10 @@ def run_single_trial(N, trial_idx, args, trial_dir):
     }
     metrics = evaluate(C, matrices_dict)
 
-    # --- Save analysis matrices ---
+    # --- Save analysis to code/simulations/output/<run_id>/ ---
+    os.makedirs(an_trial_dir, exist_ok=True)
     np.savez_compressed(
-        os.path.join(trial_dir, "analysis.npz"),
+        os.path.join(an_trial_dir, "analysis.npz"),
         ground_truth_weights=C,
         fc_raw=fc_raw,
         fc_significance=fc_significance,
@@ -160,7 +168,7 @@ def run_single_trial(N, trial_idx, args, trial_dir):
         mi_matched=mi_matched,
         cl_adjacency=cl_adjacency,
     )
-    print(f"Saved → {os.path.join(trial_dir, 'analysis.npz')}")
+    print(f"Saved analysis → {os.path.join(an_trial_dir, 'analysis.npz')}")
 
     return metrics
 
@@ -244,7 +252,7 @@ def main():
     parser.add_argument("--simlen", type=float, default=600000,
                         help="Simulation length in ms (default: 600000)")
     parser.add_argument("--connectivity",
-                        choices=["erdos_renyi", "dense", "sparse", "tree", "hierarchical"],
+                        choices=["erdos_renyi", "dense", "tree", "hierarchical"],
                         default="erdos_renyi", help="Connectivity mode (default: erdos_renyi)")
     parser.add_argument("--density", type=float, default=0.5,
                         help="Edge probability for erdos_renyi mode (0 < density ≤ 1, default: 0.5)")
@@ -270,8 +278,12 @@ def main():
                         help="Noise amplitude (default: 2e-4)")
     parser.add_argument("--num-bins", type=int, default=100,
                         help="MI discretization bins (default: 100)")
-    parser.add_argument("--outdir", default="output/sweep",
-                        help="Output directory (default: output/sweep)")
+    parser.add_argument("--run-id", default=None,
+                        help=(
+                            "Identifier for this run, used as the directory name under "
+                            "datasets/synthetic/, simulations/output/, and simulations/figures/. "
+                            "Auto-generated as YYYYMMDD_HHMMSS_sweep if omitted."
+                        ))
     parser.add_argument("--seed", type=int, default=None,
                         help="Base random seed (each trial uses seed + trial_idx)")
     args = parser.parse_args()
@@ -279,13 +291,25 @@ def main():
     if args.edge_mode == "uniform" and args.coupling_type is None:
         parser.error("--coupling-type is required when --edge-mode is uniform")
 
+    args.device = detect_device(args.device)
+
+    if args.run_id is None:
+        args.run_id = make_run_id("sweep")
+    print(f"Run ID: {args.run_id}")
+
+    save_params(args.run_id, "sweep_sim.py", vars(args))
+
     N_values = sorted(args.N_values)
     n_trials = args.trials
+
+    ts_base = timeseries_dir(args.run_id)
+    an_base = analysis_dir(args.run_id)
 
     print(f"Sweep: N = {N_values}, {n_trials} trials each")
     print(f"Connectivity: {args.connectivity}, edge-mode: {args.edge_mode}, "
           f"simlen: {args.simlen} ms")
-    print(f"Output: {args.outdir}\n")
+    print(f"Timeseries → {ts_base}")
+    print(f"Analysis   → {an_base}\n")
 
     arrays = build_results_arrays(N_values, n_trials)
 
@@ -295,47 +319,30 @@ def main():
             print(f"  N={N}, trial {ti+1}/{n_trials}")
             print(f"{'#'*60}")
 
-            trial_dir = os.path.join(args.outdir, f"N{N}", f"trial{ti}")
+            ts_trial_dir = os.path.join(ts_base, f"N{N}", f"trial{ti}")
+            an_trial_dir = os.path.join(an_base, f"N{N}", f"trial{ti}")
             t0 = time.time()
-            trial_metrics = run_single_trial(N, ti, args, trial_dir)
+            trial_metrics = run_single_trial(N, ti, args, ts_trial_dir, an_trial_dir)
             elapsed = time.time() - t0
             print(f"Trial completed in {elapsed:.1f}s")
 
             store_trial_metrics(arrays, ni, ti, trial_metrics)
 
-    # --- Save results ---
-    os.makedirs(args.outdir, exist_ok=True)
+    # --- Save aggregated results to analysis dir ---
+    os.makedirs(an_base, exist_ok=True)
 
     # sweep_results.npz
     save_dict = {"N_values": np.array(N_values), "n_trials": n_trials}
     save_dict.update(arrays)
-    npz_path = os.path.join(args.outdir, "sweep_results.npz")
+    npz_path = os.path.join(an_base, "sweep_results.npz")
     np.savez_compressed(npz_path, **save_dict)
     print(f"\nSaved → {npz_path}")
 
-    # sweep_summary.json
-    config = {
-        "N_values": N_values,
-        "trials": n_trials,
-        "simlen": args.simlen,
-        "connectivity": args.connectivity,
-        "density": args.density,
-        "branching": args.branching,
-        "edge_mode": args.edge_mode,
-        "coupling_type": args.coupling_type,
-        "coupling_types_subset": args.coupling_types,
-        "extra_edges": args.extra_edges,
-        "no_delays": args.no_delays,
-        "device": args.device,
-        "G": args.G,
-        "D": args.D,
-        "num_bins": args.num_bins,
-        "seed": args.seed,
-    }
-    summary = build_summary(N_values, arrays, config)
-    json_path = os.path.join(args.outdir, "sweep_summary.json")
+    # sweep_summary.json — aggregated mean/std per N per method (no config; see params.json)
+    summary = build_summary(N_values, arrays, config={})
+    json_path = os.path.join(an_base, "sweep_summary.json")
     with open(json_path, "w") as f:
-        json.dump(summary, f, indent=2)
+        json.dump(summary["results"], f, indent=2)
     print(f"Saved → {json_path}")
 
     # --- Print summary table ---

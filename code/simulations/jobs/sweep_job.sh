@@ -18,7 +18,6 @@
 # ---------------------------------------------------------------------------
 BASE_DIR=/project/greencenter/Lin_lab/s229618/fmri_connectivity_trees
 SCRIPT_DIR=${BASE_DIR}/code/simulations
-OUTPUT_ROOT=${SCRIPT_DIR}/output/sweep
 
 eval "$(conda shell.bash hook)"
 conda activate dynamric
@@ -81,14 +80,14 @@ fi
 # ---------------------------------------------------------------------------
 # Run
 # ---------------------------------------------------------------------------
-OUTDIR="${OUTPUT_ROOT}/${CONN_TAG}/${COUP_TAG}"
+RUN_ID="${CONN_TAG}_${COUP_TAG}"
 SEED=$(( 1000 + SLURM_ARRAY_TASK_ID ))   # unique but reproducible seed per task
 
 echo "========================================================"
 echo "  Array task : ${SLURM_ARRAY_TASK_ID}"
 echo "  Connectivity: ${CONNECTIVITY} ${CONN_EXTRA}  [${CONN_TAG}]"
 echo "  Coupling    : ${COUP_EXTRA}  [${COUP_TAG}]"
-echo "  Output      : ${OUTDIR}"
+echo "  Run ID      : ${RUN_ID}"
 echo "  Seed        : ${SEED}"
 echo "========================================================"
 
@@ -101,7 +100,7 @@ python sweep_sim.py \
     ${COUP_EXTRA} \
     --no-delays \
     --device cuda \
-    --outdir "${OUTDIR}" \
+    --run-id "${RUN_ID}" \
     --seed "${SEED}"
 
 echo "Done — task ${SLURM_ARRAY_TASK_ID} finished at $(date)"

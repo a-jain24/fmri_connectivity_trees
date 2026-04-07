@@ -17,7 +17,7 @@ Usage:
         --N 15 --simlen 600000 --edge-mode random \
         --outdir code/simulations/output/dynamics_test \
         --no-delays \
-        --connectivity sparse
+        --connectivity erdos_renyi
 
     python code/simulations/dynamics_simulation.py \
         --N 15 --simlen 600000 --edge-mode uniform --coupling-type quadrature \
@@ -69,7 +69,6 @@ def build_connectivity(N, mode, rng, extra_edges=0, branching=3, density=0.5):
                          continuous sparsity scale.  Connectivity is guaranteed by
                          bridging isolated components.  Symmetric, weights in [0.5, 3.0].
         'dense'        — Legacy: rng.integers(0, 4), asymmetric, ~75% fill.
-        'sparse'       — Legacy: Erdos-Renyi with fixed p = min(4/(N-1), 0.8) ~ avg degree 4.
         'tree'         — Uniformly random labeled tree via Prüfer sequence (NetworkX).
         'hierarchical' — BFS-style random branching tree; each internal node gets
                          1..branching children, producing explicit multi-level hierarchy.
@@ -84,7 +83,7 @@ def build_connectivity(N, mode, rng, extra_edges=0, branching=3, density=0.5):
 
     Returns
     -------
-    C : ndarray (N, N), symmetric for erdos_renyi/sparse/tree/hierarchical,
+    C : ndarray (N, N), symmetric for erdos_renyi/tree/hierarchical,
         asymmetric for dense.
     """
     if mode == "dense":
@@ -150,39 +149,6 @@ def build_connectivity(N, mode, rng, extra_edges=0, branching=3, density=0.5):
             attempts += 1
         if added < extra_edges:
             print(f"Warning: only added {added}/{extra_edges} extra edges (graph may be near-complete)")
-        return C
-
-    if mode == "sparse":
-        C = np.zeros((N, N))
-        p = min(4.0 / (N - 1), 0.8)
-        for i in range(N):
-            for j in range(i + 1, N):
-                if rng.random() < p:
-                    w = rng.uniform(0.5, 3.0)
-                    C[i, j] = C[j, i] = w
-        # Ensure connected via NetworkX
-        G = nx.Graph()
-        G.add_nodes_from(range(N))
-        for i in range(N):
-            for j in range(i + 1, N):
-                if C[i, j] > 0:
-                    G.add_edge(i, j)
-        components = list(nx.connected_components(G))
-        while len(components) > 1:
-            # Connect first node of each component to first node of next
-            for ci in range(len(components) - 1):
-                a = min(components[ci])
-                b = min(components[ci + 1])
-                w = rng.uniform(0.5, 3.0)
-                C[a, b] = C[b, a] = w
-            # Recompute components
-            G = nx.Graph()
-            G.add_nodes_from(range(N))
-            for i in range(N):
-                for j in range(i + 1, N):
-                    if C[i, j] > 0:
-                        G.add_edge(i, j)
-            components = list(nx.connected_components(G))
         return C
 
     if mode == "erdos_renyi":
@@ -732,7 +698,7 @@ def main():
                              "(e.g. --coupling-types linear quadrature squared). "
                              "Only used with --edge-mode random; default is all 5 types.")
     parser.add_argument("--connectivity",
-                        choices=["erdos_renyi", "dense", "sparse", "tree", "hierarchical"],
+                        choices=["erdos_renyi", "dense", "tree", "hierarchical"],
                         default="erdos_renyi",
                         help="Connectivity generation mode (default: erdos_renyi)")
     parser.add_argument("--density", type=float, default=0.5,
@@ -782,7 +748,7 @@ def main():
     # --- Coupling types ---
     uniform_type  = NAME_TO_TYPE.get(args.coupling_type)  if args.coupling_type  else None
     allowed_types = [NAME_TO_TYPE[t] for t in args.coupling_types] if args.coupling_types else None
-    if args.connectivity in ("erdos_renyi", "sparse", "tree", "hierarchical"):
+    if args.connectivity in ("erdos_renyi", "tree", "hierarchical"):
         coupling_types = build_symmetric_coupling_types(C, args.edge_mode, rng,
                                                         uniform_type=uniform_type,
                                                         allowed_types=allowed_types)
