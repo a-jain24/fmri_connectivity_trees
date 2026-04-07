@@ -1,11 +1,14 @@
 import os
+import sys
 import numpy as np
 import torch
 from nilearn.connectome import ConnectivityMeasure
 import csv
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-# device = torch.device("cpu")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from msc_paths import BASE_DIR, ts_dir as _ts_dir, _output, detect_device
+
+device = detect_device()
 print(f'Using device: {device}')
 
 # concatenate timeseries to get a single timeseries for each subject
@@ -182,104 +185,77 @@ def pairwise_covariance(timeseries, num_bins=10):
     mi_matrix = get_mutual_information(joint_probs, product_marginals, num_bins=num_bins)
     return mi_matrix, joint_probs, product_marginals
 
-def save_data(data, subject, base_dir='/mfs/io/groups/dmello/projects/dynamric/fmri_connectivity_trees/code/functional_connectivity/midnight_scan_club', measure="mutual_information", task="rest", atlas="Schaefer", atlas_subdir="schaefer_100", skl=False, num_bins=10):
-    """
-    Save the covariance matrix to a CSV file.
-    """
-    output_path = f'{base_dir}/code/functional_connectivity/midnight_scan_club/output/{measure}/{subject}/{atlas_subdir}'
-    if skl:
-        task = f'{task}_skl_{num_bins}bins'
-    else:
-        task = f'{task}_{num_bins}bins'
+def save_data(data, subject, base_dir=None, measure="covariance", task="rest", atlas="Schaefer", atlas_subdir="schaefer_100", skl=False, num_bins=10):
+    """Save a computed matrix to the appropriate output directory."""
+    output_path = _output(measure, subject, atlas_subdir)
+    suffix = f'_skl_{num_bins}bins' if skl else f'_{num_bins}bins'
+    filename = task + suffix
     os.makedirs(output_path, exist_ok=True)
-    np.save(f'{output_path}/{task}.npy', data.cpu())
+    arr = data.cpu().numpy() if hasattr(data, 'cpu') else data
+    np.save(os.path.join(output_path, f'{filename}.npy'), arr)
 
-def load_data(subjects=['MSC01'], base_dir='/mfs/io/groups/dmello/projects/dynamric/fmri_connectivity_trees/code/functional_connectivity/midnight_scan_club', measure="mutual_information", task="rest", atlas="Schaefer", atlas_subdir="schaefer_100", skl=False, num_bins=10):
-    """
-    Save the covariance matrix to a CSV file.
-    """
+
+def load_data(subjects=['MSC01'], base_dir=None, measure="covariance", task="rest", atlas="Schaefer", atlas_subdir="schaefer_100", skl=False, num_bins=10):
+    """Load previously saved matrices for a list of subjects."""
     data = {}
     for subject in subjects:
-        data_path = f'{base_dir}/code/functional_connectivity/midnight_scan_club/output/{measure}/{subject}/{atlas_subdir}'
-        if skl:
-            file_name = f'{task}_skl_{num_bins}bins'
-        else:
-            file_name = f'{task}_{num_bins}bins'
-
-        data[subject] = np.load(f'{data_path}/{file_name}.npy')
+        output_path = _output(measure, subject, atlas_subdir)
+        suffix = f'_skl_{num_bins}bins' if skl else f'_{num_bins}bins'
+        filename = task + suffix
+        data[subject] = np.load(os.path.join(output_path, f'{filename}.npy'))
     return data
 
-def combine_thalamic_nuclei(subjects, tasks, sessions, base_dir, task_dir='all_tasks', num_bins=10):
+def combine_thalamic_nuclei(subjects, tasks, sessions, base_dir=None, task_dir='all_tasks', num_bins=10):
 
     thalamus_regions = ['left_global', 'right_global']
-
-    # with open(f'{base_dir}/atlases/MorelAtlasMNI152/thalamus_regions', 'r') as f:
-    #     reader = csv.reader(f, delimiter='\t')
-    #     for row in reader:
-    #         thalamus_regions.append(row[0])
-    
     timeseries_array = []
 
     for region in thalamus_regions:
-
         timeseries = {}
         for subject in subjects:
-            shape_path = f'{base_dir}/code/functional_connectivity/midnight_scan_club/output/roi_time_series/{subject}/{sessions[0]}/thalamus/{region}/{task_dir}/shape/'
-            pooled_path = f'{base_dir}/code/functional_connectivity/midnight_scan_club/output/roi_time_series/{subject}/{sessions[0]}/thalamus/{region}/{task_dir}/pooled/'
+            shape_path = _ts_dir(subject, sessions[0], f'thalamus/{region}', task_dir) + '/shape/'
+            pooled_path = _ts_dir(subject, sessions[0], f'thalamus/{region}', task_dir) + '/pooled/'
             timeseries[subject] = get_timeseries(tasks, shape_path, pooled_path)
             for session in sessions[1:]:
-                shape_path = f'{base_dir}/code/functional_connectivity/midnight_scan_club/output/roi_time_series/{subject}/{session}/thalamus/{region}/{task_dir}/shape/'
-                pooled_path = f'{base_dir}/code/functional_connectivity/midnight_scan_club/output/roi_time_series/{subject}/{session}/thalamus/{region}/{task_dir}/pooled/'
+                shape_path = _ts_dir(subject, session, f'thalamus/{region}', task_dir) + '/shape/'
+                pooled_path = _ts_dir(subject, session, f'thalamus/{region}', task_dir) + '/pooled/'
                 timeseries[subject] = timeseries[subject] + get_timeseries(tasks, shape_path, pooled_path)
-        
-        # ADDS concatenated timeseries, combining the sessions into a single timeseries for each ROI and appending a new dict of arrays for each atlas
         timeseries_array.append(get_concat(timeseries))
 
-    # print(len(timeseries_array))
-    # print(timeseries_array[0][subjects[0]].shape)
     return timeseries_array
 
 
-def get_cov_matrices(atlases, subjects, tasks, sessions, base_dir, task_dir='all_tasks', num_bins=10, other_suffix=''):
+def get_cov_matrices(atlases, subjects, tasks, sessions, base_dir=None, task_dir='all_tasks', num_bins=10, other_suffix=''):
     timeseries_array = []
     atlas_name = ''
 
     for atlas in atlases:
-
         atlas_name = atlas_name + '_' + atlas if atlas_name != '' else atlas
 
-        # array of timeseries dicts for thalamus, each region is separate
         if atlas == 'Thalamus':
-
-            thalamus_timeseries_array = combine_thalamic_nuclei(subjects, tasks, sessions, base_dir, task_dir=task_dir, num_bins=num_bins)
+            thalamus_timeseries_array = combine_thalamic_nuclei(subjects, tasks, sessions, task_dir=task_dir, num_bins=num_bins)
             for ts in thalamus_timeseries_array:
                 timeseries_array.append(ts)
-
         else:
             timeseries = {}
             for subject in subjects:
-                shape_path = f'{base_dir}/code/functional_connectivity/midnight_scan_club/output/roi_time_series/{subject}/{sessions[0]}/{atlas}/{task_dir}/shape/'
-                pooled_path = f'{base_dir}/code/functional_connectivity/midnight_scan_club/output/roi_time_series/{subject}/{sessions[0]}/{atlas}/{task_dir}/pooled/'
+                shape_path = _ts_dir(subject, sessions[0], atlas, task_dir) + '/shape/'
+                pooled_path = _ts_dir(subject, sessions[0], atlas, task_dir) + '/pooled/'
                 timeseries[subject] = get_timeseries(tasks, shape_path, pooled_path)
                 for session in sessions[1:]:
-                    shape_path = f'{base_dir}/code/functional_connectivity/midnight_scan_club/output/roi_time_series/{subject}/{session}/{atlas}/{task_dir}/shape/'
-                    pooled_path = f'{base_dir}/code/functional_connectivity/midnight_scan_club/output/roi_time_series/{subject}/{session}/{atlas}/{task_dir}/pooled/'
+                    shape_path = _ts_dir(subject, session, atlas, task_dir) + '/shape/'
+                    pooled_path = _ts_dir(subject, session, atlas, task_dir) + '/pooled/'
                     timeseries[subject] = timeseries[subject] + get_timeseries(tasks, shape_path, pooled_path)
-            
-            # ADDS concatenated timeseries, combining the sessions into a single timeseries for each ROI and appending a new array for each atlas, each timeseries is a dictionary with subject as key
             timeseries_array.append(get_concat(timeseries))
 
-    # appends the atlas arrays for one big concatenated timeseries array, in a dictionary for each subject
-    # print(len(timeseries_array))
     concat_timeseries = combine_timeseries(subjects, timeseries_array)
     print(concat_timeseries[subjects[0]].shape)
-
 
     for subject in subjects:
         for task in tasks:
             print(f'Computing cov for subject {subject}, task {task}, atlases {atlas_name}')
             cov_mat = get_covariance(concat_timeseries[subject])
-            save_data(cov_mat, base_dir=base_dir, subject=subject, measure='covariance', task=task, atlas=atlas, atlas_subdir=atlas_name, skl=False, num_bins=100)
+            save_data(cov_mat, subject=subject, measure='covariance', task=task, atlas=atlas, atlas_subdir=atlas_name, skl=False, num_bins=100)
 
 
 # def get_cov_matrices(atlases, subjects, tasks, sessions, base_dir):
@@ -312,54 +288,16 @@ def get_cov_matrices(atlases, subjects, tasks, sessions, base_dir, task_dir='all
 
 
 def main():
+    os.chdir(BASE_DIR)
 
-    # set the working directory to fmri_connectivity_trees root directory
-    home_base_dir = '/Users/aj/dmello_lab/fmri_connectivity_trees' # directory where repository lives at home computer
-    lab_base_dir = '/Users/ajjain/Downloads/Code/fmri_connectivity_trees' # directory where repository lives at lab computer
-    utd_base_dir = '/mfs/io/groups/dmello/projects/dynamric/fmri_connectivity_trees'
-    biohpc_base_dir = '/project/greencenter/Lin_lab/s229618/fmri_connectivity_trees'
-
-    # set base directory depending on where the code is being run
-    base_dir = home_base_dir if os.path.exists(home_base_dir) else lab_base_dir
-    base_dir = utd_base_dir if os.path.exists(utd_base_dir) else base_dir
-    base_dir = biohpc_base_dir if os.path.exists(biohpc_base_dir) else base_dir
-
-    os.chdir(base_dir)
-    
-    # path for shapes and pooled timeseries
-    subjects = [
-                'MSC01',
-                # 'MSC02', 
-                # 'MSC03',
-                'MSC04',
-                # 'MSC05', 
-                # 'MSC06',
-                'MSC07', 
-                # 'MSC08',
-                'MSC09',
-                # 'MSC10'
-                ]
-    
-    sessions = [
-        'func01', 
-        'func02', 
-        'func03', 
-        'func04', 
-        'func05', 
-        'func06', 
-        'func07', 
-        'func08', 
-        'func09', 
-        'func10'
-        ]
-    
-    tasks = [
-        'rest'
-        ]
-    atlases = ['glasser360', 'SUIT', 'Thalamus']
+    subjects = ['MSC01', 'MSC02', 'MSC03', 'MSC04', 'MSC05',
+                'MSC06', 'MSC07', 'MSC08', 'MSC09', 'MSC10']
+    sessions = [f'func{i:02d}' for i in range(1, 11)]
+    tasks    = ['rest']
+    atlases  = ['glasser360', 'SUIT', 'Thalamus']
     num_bins = 100
 
-    get_cov_matrices(atlases, subjects, tasks, sessions, base_dir, num_bins=num_bins, task_dir='rest')
+    get_cov_matrices(atlases, subjects, tasks, sessions, num_bins=num_bins, task_dir='rest')
 
 if __name__ == "__main__":
     main()

@@ -10,6 +10,8 @@ import nibabel as nib
 import numpy as np
 from matplotlib import pyplot as plt
 
+from msc_paths import ts_root, ATLAS_DIR
+
 # fetch different atlases
 def fetch_atlas(atlas_name, atlas_dir=None):
 
@@ -21,21 +23,21 @@ def fetch_atlas(atlas_name, atlas_dir=None):
         atlas = datasets.fetch_atlas_msdl()
     elif atlas_name == 'glasser360':
         atlas = {}
-        atlas['img_path'] = '/mfs/io/groups/dmello/projects/dynamric/fmri_connectivity_trees/atlases/glasser360/glasser360MNI.nii.gz'
-        atlas['labels_path'] = '/mfs/io/groups/dmello/projects/dynamric/fmri_connectivity_trees/atlases/glasser360/glasser360NodeNames.txt'
+        atlas['img_path'] = os.path.join(ATLAS_DIR, 'glasser360', 'glasser360MNI.nii.gz')
+        atlas['labels_path'] = os.path.join(ATLAS_DIR, 'glasser360', 'glasser360NodeNames.txt')
     elif atlas_name == 'SUIT':
         atlas = {}
-        atlas['img_path'] = '/mfs/io/groups/dmello/projects/egcerebellum/code/connectivity/correlation/parcellations/atl-Anatom_space-MNI_dseg_resamplespace-MNI152NLin2009cAsym_res-2.nii'
-        atlas['lut_path'] = '/mfs/io/groups/dmello/projects/egcerebellum/code/connectivity/correlation/parcellations/atl-Anatom.tsv'
+        atlas['img_path'] = os.path.join(ATLAS_DIR, 'SUIT', 'atl-Anatom_space-MNI_dseg_resamplespace-MNI152NLin2009cAsym_res-2.nii')
+        atlas['lut_path'] = os.path.join(ATLAS_DIR, 'SUIT', 'atl-Anatom.tsv')
     elif atlas_name == 'Morel_Left_Global_Thalamus':
         atlas = {}
-        atlas['img_path'] = '/groups/dmello/projects/dynamric/fmri_connectivity_trees/atlases/MorelAtlasMNI152/left-vols-1mm/global.nii.gz'
+        atlas['img_path'] = os.path.join(ATLAS_DIR, 'MorelAtlasMNI152', 'left-vols-1mm', 'global.nii.gz')
     elif atlas_name == 'Morel_Right_Global_Thalamus':
         atlas = {}
-        atlas['img_path'] = '/groups/dmello/projects/dynamric/fmri_connectivity_trees/atlases/MorelAtlasMNI152/right-vols-1mm/global.nii.gz'
+        atlas['img_path'] = os.path.join(ATLAS_DIR, 'MorelAtlasMNI152', 'right-vols-1mm', 'global.nii.gz')
     elif atlas_name == 'Morel_All':
         atlas = {}
-        atlas['img_path'] = f'/mfs/io/groups/dmello/projects/dynamric/fmri_connectivity_trees/atlases/MorelAtlasMNI152'
+        atlas['img_path'] = os.path.join(ATLAS_DIR, 'MorelAtlasMNI152')
 
     else:
         raise ValueError("Atlas not recognized.")
@@ -224,7 +226,7 @@ def get_pooled(base_url, file_ids, masker, tasks='rest', atlas_name='glasser360'
                     continue
                 
                 # save individual just in case
-                save_data(pooled_subject_dict[key], f"thalamus/{key}", [file_id], 'output/roi_time_series', tasks=tasks, subject_id=subject_id, session=session)
+                save_data(pooled_subject_dict[key], f"thalamus/{key}", [file_id], ts_root(), tasks=tasks, subject_id=subject_id, session=session)
         
         # concatenate all subregion time series along the ROI axis
         pooled_subject = np.array(pooled_subject_dict[list(pooled_subject_dict.keys())[0]])  # initialize with first key
@@ -250,7 +252,9 @@ def get_pooled(base_url, file_ids, masker, tasks='rest', atlas_name='glasser360'
     return pooled_subject
 
 # save pooled time series and shapes
-def save_data(pooled_subject, atlas_name, file_ids, output_dir='output/roi_time_series', subject_id="MSC01", tasks="all_tasks", session='func01'):
+def save_data(pooled_subject, atlas_name, file_ids, output_dir=None, subject_id="MSC01", tasks="all_tasks", session='func01'):
+    if output_dir is None:
+        output_dir = ts_root()
 
     this_output_dir = f'{output_dir}/{subject_id}/{session}/{atlas_name}/{tasks}'
 
@@ -308,7 +312,7 @@ def extract_time_series(base_url, file_ids, atlas_name='MSDL', tasks="all_tasks"
     pooled_subject = get_pooled(base_url, file_ids, masker, atlas_name=atlas_name, subject_id=subject_id, session=session)
 
     # save the pooled data
-    save_data(pooled_subject, atlas_name, file_ids, 'output/roi_time_series', tasks=tasks, subject_id=subject_id, session=session)
+    save_data(pooled_subject, atlas_name, file_ids, ts_root(), tasks=tasks, subject_id=subject_id, session=session)
 
 def main():
 
