@@ -24,6 +24,9 @@ conda activate dynamric
 cd "${SCRIPT_DIR}"
 mkdir -p jobs/logs
 
+# Default to 0 when run outside SLURM (e.g. bash grid_job_test.sh locally)
+SLURM_ARRAY_TASK_ID=${SLURM_ARRAY_TASK_ID:-0}
+
 # ---------------------------------------------------------------------------
 # Map SLURM array index → connectivity spec  (indices 0-2)
 #   0 : hierarchical, branching = 2
