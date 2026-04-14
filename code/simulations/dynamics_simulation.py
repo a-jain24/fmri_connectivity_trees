@@ -26,6 +26,8 @@ Usage:
 
 import argparse
 import os
+import sys
+import time
 
 import networkx as nx
 import numpy as np
@@ -50,7 +52,6 @@ TYPE_NAMES = {
 }
 
 NAME_TO_TYPE = {v: k for k, v in TYPE_NAMES.items()}
-
 
 # ---------------------------------------------------------------------------
 # Connectivity generation
@@ -531,7 +532,8 @@ def _compute_coupling_torch(history, step, idelays_t, j_range,
 # ---------------------------------------------------------------------------
 
 def run_sim(conn, G, D, coupling_types, tract_lengths=None, params=None,
-            conduction_speed=3.0, dt=0.5, simlen=1000, device=None):
+            conduction_speed=3.0, dt=0.5, simlen=1000, device=None,
+            performance_mode="fidelity"):
     """
     Simulate Generic2dOscillator network with edge-specific coupling types,
     Heun stochastic integration, and temporal-average monitoring.
@@ -564,6 +566,10 @@ def run_sim(conn, G, D, coupling_types, tract_lengths=None, params=None,
     device : str or None
         PyTorch device string ('cpu', 'cuda', 'cuda:1', 'mps') or None to
         auto-select: CUDA → MPS → CPU.
+    performance_mode : str
+        Numerical/performance preset:
+          - 'fidelity' (default): float64 on CUDA/CPU, float32 on MPS.
+          - 'fast': float32 on all devices, enables TF32 matmul on CUDA.
 
     Returns
     -------
@@ -574,9 +580,19 @@ def run_sim(conn, G, D, coupling_types, tract_lengths=None, params=None,
     """
     # --- Device / dtype setup ---
     dev = _select_device(device)
-    # MPS has incomplete float64 support on older PyTorch builds; use float32
-    fdtype = torch.float32 if dev.type == "mps" else torch.float64
-    print(f"[run_sim] device={dev}, dtype={fdtype}")
+    if performance_mode not in ("fidelity", "fast"):
+        raise ValueError("performance_mode must be 'fidelity' or 'fast'")
+
+    # MPS has incomplete float64 support on older PyTorch builds.
+    if performance_mode == "fast":
+        fdtype = torch.float32
+        # On CUDA, TF32 can improve throughput in float32 paths.
+        if dev.type == "cuda":
+            torch.backends.cuda.matmul.allow_tf32 = True
+    else:
+        fdtype = torch.float32 if dev.type == "mps" else torch.float64
+
+    print(f"[run_sim] device={dev}, dtype={fdtype}, mode={performance_mode}")
 
     N = conn.shape[0]
     n_steps = int(simlen / dt)
@@ -623,7 +639,12 @@ def run_sim(conn, G, D, coupling_types, tract_lengths=None, params=None,
     sqrt_dt = dt ** 0.5
     out_t, out_V = [], []
 
-    for k in tqdm(range(n_steps), desc="Simulating", miniters=n_steps // 100):
+    _log_interval = max(1, n_steps // 10)   # print every ~10 % when not a TTY
+    _is_tty = sys.stdout.isatty()
+    _t_loop_start = time.time()
+
+    for k in tqdm(range(n_steps), desc="Simulating", miniters=n_steps // 100,
+                  disable=not _is_tty):
         history[k % horizon] = curr_state
 
         coupling_input = _compute_coupling_torch(
@@ -651,6 +672,15 @@ def run_sim(conn, G, D, coupling_types, tract_lengths=None, params=None,
         if buf_idx == skip_step - 1:
             out_t.append(k * dt)
             out_V.append(buffer_V.mean(dim=0).cpu().numpy())
+
+        # Log-file-friendly progress (only when stdout is not a TTY)
+        if not _is_tty and k > 0 and k % _log_interval == 0:
+            elapsed = time.time() - _t_loop_start
+            steps_per_sec = k / elapsed
+            pct = 100 * k / n_steps
+            eta_s = (n_steps - k) / steps_per_sec
+            print(f"  [run_sim] {pct:5.1f}%  {steps_per_sec:,.0f} steps/s  "
+                  f"ETA {eta_s/60:.1f} min", flush=True)
 
     return np.array(out_t), np.array(out_V)
 
@@ -714,6 +744,8 @@ def main():
     parser.add_argument("--device", default=None,
                         help="PyTorch device: 'cpu', 'cuda', 'cuda:1', 'mps', or omit "
                              "to auto-select (CUDA → MPS → CPU)")
+    parser.add_argument("--performance-mode", choices=["fidelity", "fast"], default="fidelity",
+                        help="Numerical/performance preset (default: fidelity)")
     parser.add_argument("--outdir", default="output/dynamics_sim",
                         help="Output directory (default: output/dynamics_sim)")
     parser.add_argument("--seed", type=int, default=None, help="Random seed")
@@ -791,6 +823,7 @@ def main():
         params=params,
         conduction_speed=conduction_speed, dt=dt, simlen=args.simlen,
         device=args.device,
+        performance_mode=args.performance_mode,
     )
 
     # --- Save ---

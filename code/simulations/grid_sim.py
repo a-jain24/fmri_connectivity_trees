@@ -173,6 +173,7 @@ def simulate_cell(N, G, mode, conn_kwargs, conn_tag, noise_levels, args, cell_se
             dt=0.5,
             simlen=args.simlen,
             device=args.device,
+            performance_mode=args.performance_mode,
         )
 
         elapsed = time.time() - t0
@@ -243,6 +244,10 @@ def main():
     parser.add_argument(
         "--device", default=None,
         help="PyTorch device: cpu / cuda / mps (default: auto)",
+    )
+    parser.add_argument(
+        "--performance-mode", choices=["fidelity", "fast"], default="fidelity",
+        help="Numerical/performance preset for run_sim (default: fidelity)",
     )
     parser.add_argument(
         "--seed", type=int, default=42,
