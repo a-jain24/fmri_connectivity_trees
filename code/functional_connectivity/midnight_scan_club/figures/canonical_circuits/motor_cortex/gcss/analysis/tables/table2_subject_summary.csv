@@ -1,0 +1,11 @@
+Subject,TRs,MI_mean,MI_max,FC_mean,FC_max,Strongest_pair,Hub_nodes,Canonical_edges
+MSC01,8180,0.356,0.883,0.293,0.908,L_M1_tongue ↔ R_M1_tongue,L_S1S2,6/6
+MSC02,8180,0.376,0.869,0.35,0.873,L_M1_tongue ↔ L_S1S2,"L_S1S2, R_M1_hand, R_M1_tongue",6/6
+MSC03,8180,0.282,0.832,0.406,0.875,L_M1_tongue ↔ L_S1S2,L_S1S2,6/6
+MSC04,8180,0.438,1.138,0.46,0.934,L_M1_tongue ↔ L_S1S2,"L_M1_tongue, L_S1S2, R_M1_hand",6/6
+MSC05,8180,0.272,0.656,0.262,0.82,L_M1_tongue ↔ R_M1_tongue,"R_M1_hand, R_M1_tongue, SMA",4/6
+MSC06,8179,0.567,0.888,0.249,0.846,L_M1_tongue ↔ R_M1_tongue,"L_S1S2, R_M1_hand",5/6
+MSC07,8180,0.506,0.986,0.527,0.892,L_M1_tongue ↔ R_M1_tongue,L_M1_tongue,4/6
+MSC08,8180,0.636,1.003,0.463,0.874,L_M1_tongue ↔ L_S1S2,"L_S1S2, R_M1_hand",6/6
+MSC09,8180,0.281,0.796,0.276,0.867,L_M1_tongue ↔ R_M1_tongue,"L_S1S2, R_M1_hand",6/6
+MSC10,8180,0.515,1.133,0.409,0.918,L_M1_tongue ↔ R_M1_tongue,"L_S1S2, R_M1_hand, SMA",5/6
