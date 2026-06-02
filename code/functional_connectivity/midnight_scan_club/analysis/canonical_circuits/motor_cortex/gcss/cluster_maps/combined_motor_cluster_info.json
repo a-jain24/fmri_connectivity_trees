@@ -1,0 +1,90 @@
+{
+  "1": {
+    "label": "Left_PFop",
+    "peak_glasser": "Left_PFop",
+    "overlap_frac": 0.19,
+    "centroid_mni": [
+      -58.8,
+      -11.5,
+      32.4
+    ],
+    "n_voxels": 466
+  },
+  "2": {
+    "label": "Left_PF",
+    "peak_glasser": "Left_PF",
+    "overlap_frac": 1.0,
+    "centroid_mni": [
+      -51.6,
+      -36.8,
+      22.6
+    ],
+    "n_voxels": 13
+  },
+  "3": {
+    "label": "Left_FOP2",
+    "peak_glasser": "Left_FOP2",
+    "overlap_frac": 0.75,
+    "centroid_mni": [
+      -46.0,
+      -0.7,
+      11.4
+    ],
+    "n_voxels": 87
+  },
+  "4": {
+    "label": "Left_6d",
+    "peak_glasser": "Left_6d",
+    "overlap_frac": 0.714,
+    "centroid_mni": [
+      -45.4,
+      -8.8,
+      58.8
+    ],
+    "n_voxels": 30
+  },
+  "5": {
+    "label": "Left_SCEF",
+    "peak_glasser": "Left_SCEF",
+    "overlap_frac": 0.447,
+    "centroid_mni": [
+      -1.8,
+      -4.6,
+      61.7
+    ],
+    "n_voxels": 428
+  },
+  "6": {
+    "label": "Right_FOP2",
+    "peak_glasser": "Right_FOP2",
+    "overlap_frac": 0.692,
+    "centroid_mni": [
+      42.1,
+      -0.2,
+      14.1
+    ],
+    "n_voxels": 14
+  },
+  "7": {
+    "label": "Right_6v",
+    "peak_glasser": "Right_6v",
+    "overlap_frac": 0.584,
+    "centroid_mni": [
+      57.1,
+      1.5,
+      35.1
+    ],
+    "n_voxels": 173
+  },
+  "8": {
+    "label": "Right_PFop",
+    "peak_glasser": "Right_PFop",
+    "overlap_frac": 0.346,
+    "centroid_mni": [
+      58.0,
+      -13.9,
+      27.1
+    ],
+    "n_voxels": 99
+  }
+}

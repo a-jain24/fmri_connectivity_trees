@@ -196,10 +196,23 @@ def draw_hierarchical_tree(
     root: int = 0,
     title: str = '',
     ax: plt.Axes = None,
+    color_fn=None,
+    label_fn=None,
+    label_fontsize: int = 6,
 ) -> plt.Axes:
     """Draw a Chow-Liu tree with a top-down hierarchical layout.
 
-    Nodes are colored by broad network category derived from the ROI label.
+    Parameters
+    ----------
+    color_fn : callable or None
+        If provided, called as ``color_fn(label) -> hex_color_str`` for each
+        node label.  Overrides the default ``infer_network`` coloring.
+    label_fn : callable or None
+        If provided, called as ``label_fn(label) -> str`` to produce the
+        display text for each node.  Labels are drawn rotated 45° above each
+        node.  Pass ``None`` to suppress labels entirely.
+    label_fontsize : int
+        Font size for node labels when ``label_fn`` is set.
     """
     if ax is None:
         _, ax = plt.subplots(figsize=(14, 8))
@@ -211,8 +224,15 @@ def draw_hierarchical_tree(
     directed = nx.bfs_tree(tree, source=root)
     pos = _hierarchy_pos(directed, root)
 
-    networks = [infer_network(node_labels[n]) for n in tree.nodes()]
-    colors = [_NETWORK_COLORS.get(net, '#DDDDDD') for net in networks]
+    if color_fn is not None:
+        colors = [color_fn(node_labels[n]) for n in tree.nodes()]
+        legend_items = {}
+    else:
+        networks = [infer_network(node_labels[n]) for n in tree.nodes()]
+        colors = [_NETWORK_COLORS.get(net, '#DDDDDD') for net in networks]
+        legend_items = {net: col for net, col in _NETWORK_COLORS.items()
+                        if net in networks}
+
     edge_weights = [tree[u][v]['weight'] for u, v in tree.edges()]
     max_w = max(edge_weights) if edge_weights else 1.0
     widths = [1.0 + 3.0 * (w / max_w) for w in edge_weights]
@@ -220,15 +240,28 @@ def draw_hierarchical_tree(
     nx.draw_networkx_edges(tree, pos, width=widths, alpha=0.6, edge_color='#555555', ax=ax)
     nx.draw_networkx_nodes(tree, pos, node_color=colors, node_size=120, ax=ax)
 
+    if label_fn is not None:
+        # Estimate a small vertical offset in data units so labels sit just above nodes
+        y_vals = [y for _, y in pos.values()]
+        y_range = max(y_vals) - min(y_vals) if len(y_vals) > 1 else 1.0
+        offset = y_range * 0.04
+        for node in tree.nodes():
+            x, y = pos[node]
+            text = label_fn(node_labels[node])
+            ax.text(
+                x, y + offset, text,
+                fontsize=label_fontsize,
+                ha='left', va='bottom',
+                rotation=45, rotation_mode='anchor',
+                clip_on=False,
+            )
+
     ax.set_title(title, fontsize=10, pad=4)
     ax.axis('off')
 
-    # Legend
-    seen = {}
-    for net, col in _NETWORK_COLORS.items():
-        if net in networks and net not in seen:
-            seen[net] = ax.scatter([], [], c=col, s=60, label=net)
-    if seen:
+    if legend_items:
+        for net, col in legend_items.items():
+            ax.scatter([], [], c=col, s=60, label=net)
         ax.legend(loc='lower right', fontsize=6, ncol=2, framealpha=0.7)
 
     return ax

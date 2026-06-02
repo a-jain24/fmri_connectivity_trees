@@ -1,0 +1,24 @@
+{
+  "1": {
+    "label": "Left_3b",
+    "peak_glasser": "Left_3b",
+    "overlap_frac": 0.363,
+    "centroid_mni": [
+      -38.7,
+      -24.7,
+      58.5
+    ],
+    "n_voxels": 336
+  },
+  "2": {
+    "label": "Right_4",
+    "peak_glasser": "Right_4",
+    "overlap_frac": 0.443,
+    "centroid_mni": [
+      38.1,
+      -22.9,
+      58.3
+    ],
+    "n_voxels": 210
+  }
+}

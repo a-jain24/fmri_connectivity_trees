@@ -1,0 +1,24 @@
+{
+  "1": {
+    "label": "Left_6mp",
+    "peak_glasser": "Left_6mp",
+    "overlap_frac": 0.387,
+    "centroid_mni": [
+      -2.8,
+      -15.4,
+      67.0
+    ],
+    "n_voxels": 93
+  },
+  "2": {
+    "label": "Right_6mp",
+    "peak_glasser": "Right_6mp",
+    "overlap_frac": 0.9,
+    "centroid_mni": [
+      6.9,
+      -8.3,
+      66.5
+    ],
+    "n_voxels": 10
+  }
+}

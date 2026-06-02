@@ -1,0 +1,68 @@
+{
+  "1": {
+    "label": "Left_4",
+    "peak_glasser": "Left_4",
+    "overlap_frac": 0.315,
+    "centroid_mni": [
+      -57.5,
+      -8.7,
+      30.0
+    ],
+    "n_voxels": 1148
+  },
+  "2": {
+    "label": "Left_FOP2",
+    "peak_glasser": "Left_FOP2",
+    "overlap_frac": 0.846,
+    "centroid_mni": [
+      -36.7,
+      -6.5,
+      16.4
+    ],
+    "n_voxels": 21
+  },
+  "3": {
+    "label": "Left_PoI2",
+    "peak_glasser": "Left_PoI2",
+    "overlap_frac": 0.562,
+    "centroid_mni": [
+      -37.0,
+      2.2,
+      -3.5
+    ],
+    "n_voxels": 24
+  },
+  "4": {
+    "label": "cluster_04",
+    "peak_glasser": "cluster_04",
+    "overlap_frac": 0.0,
+    "centroid_mni": [
+      -26.4,
+      -2.3,
+      -3.9
+    ],
+    "n_voxels": 24
+  },
+  "5": {
+    "label": "Right_FOP2",
+    "peak_glasser": "Right_FOP2",
+    "overlap_frac": 0.484,
+    "centroid_mni": [
+      36.3,
+      -2.8,
+      10.8
+    ],
+    "n_voxels": 55
+  },
+  "6": {
+    "label": "Right_4",
+    "peak_glasser": "Right_4",
+    "overlap_frac": 0.426,
+    "centroid_mni": [
+      57.6,
+      -5.1,
+      28.6
+    ],
+    "n_voxels": 995
+  }
+}

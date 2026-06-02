@@ -132,6 +132,61 @@ def timeseries_output_dir(subject: str, session: str) -> str:
     return d
 
 # ---------------------------------------------------------------------------
+# ROI centroid computation
+# ---------------------------------------------------------------------------
+
+_GLASSER_IMG = os.path.join(ATLAS_DIR, 'glasser360', 'glasser360MNI.nii.gz')
+
+
+def _mask_centroid_mni(img) -> np.ndarray:
+    """MNI mm center-of-mass of a binary NIfTI mask."""
+    import nibabel as nib
+    data = np.asarray(img.dataobj, dtype=bool)
+    vox  = np.array(np.where(data), dtype=float).T   # (N_voxels, 3)
+    if len(vox) == 0:
+        return np.zeros(3)
+    return nib.affines.apply_affine(img.affine, vox.mean(axis=0))
+
+
+def compute_roi_centroids(subject: str, roi_keys: list) -> dict:
+    """
+    Return {roi_key: np.array([x_mni, y_mni, z_mni])} for all 38 ROIs.
+
+    Localizer sub-parcel centroids come from the saved binary mask NIfTIs.
+    Whole-parcel centroids are derived from the 1 mm Glasser360 atlas.
+    """
+    import nibabel as nib
+
+    m_dir = mask_output_dir(subject)
+    glasser_labels = load_glasser360_labels()
+    glasser_img    = nib.load(_GLASSER_IMG)
+    glasser_data   = np.asarray(glasser_img.dataobj)
+
+    centroids: dict = {}
+    for key in roi_keys:
+        prefix, parcel = key.split('__', 1)
+        if prefix in ('foot', 'hand', 'tongue'):
+            fpath = os.path.join(
+                m_dir,
+                f'{subject}_effector-{prefix}_parcel-{parcel}_mask.nii.gz',
+            )
+            if os.path.exists(fpath):
+                centroids[key] = _mask_centroid_mni(nib.load(fpath))
+            else:
+                centroids[key] = np.zeros(3)
+        else:   # whole__
+            idx       = glasser_labels.index(parcel)
+            mask_bool = (glasser_data == idx + 1)
+            if mask_bool.any():
+                vox = np.array(np.where(mask_bool), dtype=float).T.mean(axis=0)
+                centroids[key] = nib.affines.apply_affine(glasser_img.affine, vox)
+            else:
+                centroids[key] = np.zeros(3)
+
+    return centroids
+
+
+# ---------------------------------------------------------------------------
 # Atlas label helpers
 # ---------------------------------------------------------------------------
 

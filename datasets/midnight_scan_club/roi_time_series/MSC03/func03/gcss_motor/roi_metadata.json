@@ -1,0 +1,249 @@
+{
+  "roi_keys": [
+    "L_M1_foot",
+    "L_M1_hand",
+    "L_M1_tongue",
+    "L_PMd",
+    "L_S1S2",
+    "R_M1_foot",
+    "R_M1_hand",
+    "R_M1_tongue",
+    "R_PMv",
+    "R_S1S2",
+    "SMA"
+  ],
+  "n_timepoints": 818,
+  "n_rois": 11,
+  "subject": "MSC03",
+  "session": "func03",
+  "contrast_info": {
+    "R_M1_foot": {
+      "contrast": "LFoot",
+      "semantic_name": "R_M1_foot",
+      "source_clusters": [
+        {
+          "cluster_id": 1,
+          "peak_glasser": "Right_4",
+          "centroid_mni": [
+            5.8,
+            -25.0,
+            69.7
+          ]
+        }
+      ]
+    },
+    "L_M1_foot": {
+      "contrast": "RFoot",
+      "semantic_name": "L_M1_foot",
+      "source_clusters": [
+        {
+          "cluster_id": 1,
+          "peak_glasser": "Left_4",
+          "centroid_mni": [
+            -5.8,
+            -22.8,
+            68.9
+          ]
+        }
+      ]
+    },
+    "R_M1_hand": {
+      "contrast": "LHand",
+      "semantic_name": "R_M1_hand",
+      "source_clusters": [
+        {
+          "cluster_id": 1,
+          "peak_glasser": "Right_4",
+          "centroid_mni": [
+            39.5,
+            -20.9,
+            57.7
+          ]
+        }
+      ]
+    },
+    "L_M1_hand": {
+      "contrast": "RHand",
+      "semantic_name": "L_M1_hand",
+      "source_clusters": [
+        {
+          "cluster_id": 1,
+          "peak_glasser": "Left_3b",
+          "centroid_mni": [
+            -39.4,
+            -23.3,
+            57.4
+          ]
+        }
+      ]
+    },
+    "L_M1_tongue": {
+      "contrast": "tongue",
+      "semantic_name": "L_M1_tongue",
+      "source_clusters": [
+        {
+          "cluster_id": 1,
+          "peak_glasser": "Left_4",
+          "centroid_mni": [
+            -57.5,
+            -8.7,
+            30.0
+          ]
+        },
+        {
+          "cluster_id": 2,
+          "peak_glasser": "Left_FOP2",
+          "centroid_mni": [
+            -36.7,
+            -6.5,
+            16.4
+          ]
+        },
+        {
+          "cluster_id": 3,
+          "peak_glasser": "Left_PoI2",
+          "centroid_mni": [
+            -37.0,
+            2.2,
+            -3.5
+          ]
+        },
+        {
+          "cluster_id": 4,
+          "peak_glasser": "cluster_04",
+          "centroid_mni": [
+            -26.4,
+            -2.3,
+            -3.9
+          ]
+        }
+      ]
+    },
+    "R_M1_tongue": {
+      "contrast": "tongue",
+      "semantic_name": "R_M1_tongue",
+      "source_clusters": [
+        {
+          "cluster_id": 5,
+          "peak_glasser": "Right_FOP2",
+          "centroid_mni": [
+            36.3,
+            -2.8,
+            10.8
+          ]
+        },
+        {
+          "cluster_id": 6,
+          "peak_glasser": "Right_4",
+          "centroid_mni": [
+            57.6,
+            -5.1,
+            28.6
+          ]
+        }
+      ]
+    },
+    "L_S1S2": {
+      "contrast": "combined_motor",
+      "semantic_name": "L_S1S2",
+      "source_clusters": [
+        {
+          "cluster_id": 1,
+          "peak_glasser": "Left_PFop",
+          "centroid_mni": [
+            -58.8,
+            -11.5,
+            32.4
+          ]
+        },
+        {
+          "cluster_id": 2,
+          "peak_glasser": "Left_PF",
+          "centroid_mni": [
+            -51.6,
+            -36.8,
+            22.6
+          ]
+        },
+        {
+          "cluster_id": 3,
+          "peak_glasser": "Left_FOP2",
+          "centroid_mni": [
+            -46.0,
+            -0.7,
+            11.4
+          ]
+        }
+      ]
+    },
+    "L_PMd": {
+      "contrast": "combined_motor",
+      "semantic_name": "L_PMd",
+      "source_clusters": [
+        {
+          "cluster_id": 4,
+          "peak_glasser": "Left_6d",
+          "centroid_mni": [
+            -45.4,
+            -8.8,
+            58.8
+          ]
+        }
+      ]
+    },
+    "SMA": {
+      "contrast": "combined_motor",
+      "semantic_name": "SMA",
+      "source_clusters": [
+        {
+          "cluster_id": 5,
+          "peak_glasser": "Left_SCEF",
+          "centroid_mni": [
+            -1.8,
+            -4.6,
+            61.7
+          ]
+        }
+      ]
+    },
+    "R_S1S2": {
+      "contrast": "combined_motor",
+      "semantic_name": "R_S1S2",
+      "source_clusters": [
+        {
+          "cluster_id": 6,
+          "peak_glasser": "Right_FOP2",
+          "centroid_mni": [
+            42.1,
+            -0.2,
+            14.1
+          ]
+        },
+        {
+          "cluster_id": 8,
+          "peak_glasser": "Right_PFop",
+          "centroid_mni": [
+            58.0,
+            -13.9,
+            27.1
+          ]
+        }
+      ]
+    },
+    "R_PMv": {
+      "contrast": "combined_motor",
+      "semantic_name": "R_PMv",
+      "source_clusters": [
+        {
+          "cluster_id": 7,
+          "peak_glasser": "Right_6v",
+          "centroid_mni": [
+            57.1,
+            1.5,
+            35.1
+          ]
+        }
+      ]
+    }
+  }
+}

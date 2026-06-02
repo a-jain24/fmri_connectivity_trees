@@ -1,0 +1,13 @@
+{
+  "1": {
+    "label": "Left_SCEF",
+    "peak_glasser": "Left_SCEF",
+    "overlap_frac": 1.0,
+    "centroid_mni": [
+      -4.6,
+      -6.6,
+      57.8
+    ],
+    "n_voxels": 14
+  }
+}

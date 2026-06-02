@@ -1,0 +1,13 @@
+{
+  "1": {
+    "label": "Left_4",
+    "peak_glasser": "Left_4",
+    "overlap_frac": 0.345,
+    "centroid_mni": [
+      -0.0,
+      -22.2,
+      67.4
+    ],
+    "n_voxels": 368
+  }
+}
